@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { getToken, getCompanySlug as getAuthCompany } from '@/lib/auth';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+import { getApiUrl, getAdminSecret } from '@/lib/config';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -10,7 +9,8 @@ interface ApiResponse<T> {
 }
 
 async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  if (!API_BASE_URL) {
+  const apiUrl = getApiUrl();
+  if (!apiUrl) {
     throw new Error('VITE_API_URL não configurada');
   }
   const token = getToken();
@@ -19,7 +19,7 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
     ...(options?.headers as Record<string, string>),
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const res = await fetch(`${apiUrl}${endpoint}`, {
     headers,
     ...options,
   });
@@ -32,7 +32,7 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
 async function fetchAdminApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   return fetchApi<T>(endpoint, {
     ...options,
-    headers: { Authorization: `Bearer ${import.meta.env.VITE_ADMIN_SECRET}`, ...options?.headers },
+    headers: { Authorization: `Bearer ${getAdminSecret()}`, ...options?.headers },
   });
 }
 
@@ -364,7 +364,7 @@ export async function deleteCompanyApi(id: string) {
 
 // Check if API is configured
 export function isApiConfigured(): boolean {
-  return !!API_BASE_URL;
+  return !!getApiUrl();
 }
 
 // Login (usuário da empresa)
@@ -375,7 +375,8 @@ export interface LoginResponse {
 }
 
 export async function loginApi(email: string, password: string): Promise<LoginResponse> {
-  const res = await fetch(`${API_BASE_URL}/auth/login`, {
+  const apiUrl = getApiUrl();
+  const res = await fetch(`${apiUrl}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),

@@ -2,9 +2,7 @@ import { FormEvent, useState } from 'react';
 import { Plus, Pencil, Trash2, Building2, Server, Palette, Lock, User as UserIcon, AlertCircle, Users } from 'lucide-react';
 import { useCompanies, createCompanyApi, updateCompanyApi, deleteCompanyApi, useUsers, createUserApi, deleteUserApi, type CompanyData, type UserData, isApiConfigured } from '@/services/api';
 import { useBranding } from '@/contexts/BrandingContext';
-
-const ADMIN_USER = import.meta.env.VITE_ADMIN_USER || 'admin';
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_SECRET || 'admin';
+import { getAdminUser, getAdminSecret } from '@/lib/config';
 
 const AdminPage = () => {
   const { setIsAdmin } = useBranding();
@@ -39,7 +37,7 @@ const AdminPage = () => {
 
   const handleLogin = (e: FormEvent) => {
     e.preventDefault();
-    if (loginUser !== ADMIN_USER || loginPass !== ADMIN_PASSWORD) {
+    if (loginUser !== getAdminUser() || loginPass !== getAdminSecret()) {
       setLoginError('Usuário ou senha inválidos.');
       return;
     }

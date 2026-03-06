@@ -1,0 +1,5 @@
+{
+  "VITE_API_URL": "https://dns-monitor-api.willian-fitzbr.workers.dev",
+  "VITE_ADMIN_USER": "admin",
+  "VITE_ADMIN_SECRET": "Sudo@0412"
+}

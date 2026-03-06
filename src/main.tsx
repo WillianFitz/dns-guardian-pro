@@ -1,5 +1,8 @@
 import { createRoot } from "react-dom/client";
+import { loadRuntimeConfig } from "@/lib/config";
 import App from "./App.tsx";
 import "./index.css";
 
-createRoot(document.getElementById("root")!).render(<App />);
+loadRuntimeConfig().then(() => {
+  createRoot(document.getElementById("root")!).render(<App />);
+});
