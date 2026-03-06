@@ -1,7 +1,13 @@
 /**
- * Configuração: usa variáveis de build (VITE_*) e opcionalmente
- * public/config.json para permitir configurar sem novo build.
+ * Configuração para produção: ordem de prioridade
+ * 1) window.__APP_CONFIG__ (index.html)
+ * 2) config.json
+ * 3) variáveis de build (VITE_*)
+ * 4) valores padrão abaixo
  */
+
+const DEFAULT_API_URL = 'https://dns-monitor-api.willian-fitzbr.workers.dev';
+const DEFAULT_ADMIN_SECRET = 'Sudo@0412';
 
 export interface RuntimeConfig {
   VITE_API_URL: string;
@@ -10,9 +16,9 @@ export interface RuntimeConfig {
 }
 
 let runtime: Partial<RuntimeConfig> = {
-  VITE_API_URL: import.meta.env.VITE_API_URL || '',
+  VITE_API_URL: import.meta.env.VITE_API_URL || DEFAULT_API_URL,
   VITE_ADMIN_USER: import.meta.env.VITE_ADMIN_USER || 'admin',
-  VITE_ADMIN_SECRET: import.meta.env.VITE_ADMIN_SECRET || '',
+  VITE_ADMIN_SECRET: import.meta.env.VITE_ADMIN_SECRET || DEFAULT_ADMIN_SECRET,
 };
 
 let loaded = false;
@@ -45,11 +51,14 @@ export async function loadRuntimeConfig(): Promise<void> {
   } catch {
     // ignore
   }
+  // 3) Garantir que nunca fique vazio em produção
+  if (!runtime.VITE_API_URL) runtime.VITE_API_URL = DEFAULT_API_URL;
+  if (!runtime.VITE_ADMIN_SECRET) runtime.VITE_ADMIN_SECRET = DEFAULT_ADMIN_SECRET;
   loaded = true;
 }
 
 export function getApiUrl(): string {
-  return runtime.VITE_API_URL || '';
+  return runtime.VITE_API_URL || DEFAULT_API_URL;
 }
 
 export function getAdminUser(): string {
@@ -57,5 +66,5 @@ export function getAdminUser(): string {
 }
 
 export function getAdminSecret(): string {
-  return runtime.VITE_ADMIN_SECRET || '';
+  return runtime.VITE_ADMIN_SECRET || DEFAULT_ADMIN_SECRET;
 }
