@@ -1,1 +1,3 @@
+# Servir config.json como arquivo estático (não redirecionar para SPA)
+/config.json    /config.json    200
 /*    /index.html   200

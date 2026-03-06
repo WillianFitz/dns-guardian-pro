@@ -17,8 +17,23 @@ let runtime: Partial<RuntimeConfig> = {
 
 let loaded = false;
 
+declare global {
+  interface Window {
+    __APP_CONFIG__?: { VITE_API_URL?: string; VITE_ADMIN_USER?: string; VITE_ADMIN_SECRET?: string };
+  }
+}
+
 export async function loadRuntimeConfig(): Promise<void> {
   if (loaded) return;
+  // 1) Usar config injetada no index.html (sempre disponível)
+  const win = typeof window !== 'undefined' ? window : undefined;
+  if (win?.__APP_CONFIG__) {
+    const c = win.__APP_CONFIG__;
+    if (c.VITE_API_URL) runtime.VITE_API_URL = c.VITE_API_URL;
+    if (c.VITE_ADMIN_USER) runtime.VITE_ADMIN_USER = c.VITE_ADMIN_USER;
+    if (c.VITE_ADMIN_SECRET) runtime.VITE_ADMIN_SECRET = c.VITE_ADMIN_SECRET;
+  }
+  // 2) Sobrescrever com config.json se existir
   try {
     const res = await fetch('/config.json');
     if (res.ok) {

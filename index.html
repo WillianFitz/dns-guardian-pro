@@ -21,6 +21,14 @@
 
   <body>
     <div id="root"></div>
+    <!-- Config da API: altere aqui se o build não tiver variáveis de ambiente -->
+    <script>
+      window.__APP_CONFIG__ = {
+        VITE_API_URL: "https://dns-monitor-api.willian-fitzbr.workers.dev",
+        VITE_ADMIN_USER: "admin",
+        VITE_ADMIN_SECRET: "Sudo@0412"
+      };
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
