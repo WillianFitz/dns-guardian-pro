@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
-const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || '';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -26,7 +25,7 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
 async function fetchAdminApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   return fetchApi<T>(endpoint, {
     ...options,
-    headers: { Authorization: `Bearer ${ADMIN_SECRET}`, ...options?.headers },
+    headers: { Authorization: `Bearer ${import.meta.env.VITE_ADMIN_SECRET}`, ...options?.headers },
   });
 }
 
@@ -360,3 +359,4 @@ export async function deleteCompanyApi(id: string) {
 export function isApiConfigured(): boolean {
   return !!API_BASE_URL;
 }
+

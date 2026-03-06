@@ -40,8 +40,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
-                setIsAdmin(!isAdmin);
-                navigate(isAdmin ? '/' : '/admin');
+                const goingToAdmin = !isAdmin;
+                setIsAdmin(goingToAdmin);
+                navigate(goingToAdmin ? '/admin' : '/');
               }}
               className="flex items-center gap-1.5 text-sm opacity-80 hover:opacity-100 transition-opacity px-3 py-1.5 rounded-md hover:bg-primary/20"
             >
@@ -52,7 +53,14 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               <User className="w-4 h-4" />
               <span>admin</span>
             </div>
-            <button className="flex items-center gap-1 text-sm opacity-80 hover:opacity-100 transition-opacity">
+            <button
+              className="flex items-center gap-1 text-sm opacity-80 hover:opacity-100 transition-opacity"
+              onClick={() => {
+                setIsAdmin(false);
+                localStorage.removeItem('dns_admin_logged');
+                navigate('/');
+              }}
+            >
               <LogOut className="w-4 h-4" />
               Sair
             </button>
