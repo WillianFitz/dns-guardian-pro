@@ -33,12 +33,18 @@ async function validateApiKey(db: D1Database, key: string): Promise<string | nul
   return row ? (row as any).company_slug : null;
 }
 
-// Valida admin token (compara sem espaços extras)
+// Normaliza string (remove \r, \n, espaços extras - evita problema ao colar no dashboard)
+function norm(s: string): string {
+  return (s || '').replace(/\r\n?|\n/g, '').trim();
+}
+
+// Valida admin token
 function validateAdmin(request: Request, env: Env): boolean {
   const auth = request.headers.get('Authorization')?.trim();
-  const secret = (env.ADMIN_SECRET || '').trim();
+  const secret = norm(env.ADMIN_SECRET || '');
   if (!secret) return false;
-  return auth === `Bearer ${secret}`;
+  const expected = `Bearer ${secret}`;
+  return norm(auth || '') === norm(expected);
 }
 
 // --- Auth: hash de senha (PBKDF2) ---
