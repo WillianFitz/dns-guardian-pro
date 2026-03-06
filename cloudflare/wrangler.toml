@@ -4,10 +4,10 @@ compatibility_date = "2024-01-01"
 
 # Configurar a URL do frontend para CORS
 [vars]
-FRONTEND_URL = "https://seu-dominio.pages.dev"
-ADMIN_SECRET = "trocar-por-uma-senha-forte"
+FRONTEND_URL = "https://1886d93a.dns-monitor-frontend.pages.dev"
+ADMIN_SECRET = "Sudo@0412"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "dns-monitor"
-database_id = "SUBSTITUIR_PELO_ID_DO_D1"
+database_id = "b08a35ce-335b-49b7-9c98-e8a39bf18b4e"
