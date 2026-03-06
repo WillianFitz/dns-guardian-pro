@@ -30,9 +30,10 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
 }
 
 async function fetchAdminApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const secret = (getAdminSecret() || '').trim();
   return fetchApi<T>(endpoint, {
     ...options,
-    headers: { Authorization: `Bearer ${getAdminSecret()}`, ...options?.headers },
+    headers: { Authorization: `Bearer ${secret}`, ...options?.headers },
   });
 }
 

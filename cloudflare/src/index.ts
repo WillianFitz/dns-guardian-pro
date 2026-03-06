@@ -33,10 +33,12 @@ async function validateApiKey(db: D1Database, key: string): Promise<string | nul
   return row ? (row as any).company_slug : null;
 }
 
-// Valida admin token
+// Valida admin token (compara sem espaços extras)
 function validateAdmin(request: Request, env: Env): boolean {
-  const auth = request.headers.get('Authorization');
-  return auth === `Bearer ${env.ADMIN_SECRET}`;
+  const auth = request.headers.get('Authorization')?.trim();
+  const secret = (env.ADMIN_SECRET || '').trim();
+  if (!secret) return false;
+  return auth === `Bearer ${secret}`;
 }
 
 // --- Auth: hash de senha (PBKDF2) ---
