@@ -1,57 +1,58 @@
 #!/bin/bash
 # =============================================================
-# DNS Monitor - Coletor de Lista RPZ (ANATEL)
+# DNS Monitor - Coletor da Lista de Bloqueio (Unbound anablock.conf)
 # Cron: 0 */6 * * * /opt/dns-monitor/collect-rpz.sh
-# Roda a cada 6 horas para verificar atualizações na zona RPZ
 # =============================================================
 
 # CONFIGURAÇÃO
 API_URL="https://dns-monitor-api.seudominio.workers.dev"
 API_KEY="SUA_API_KEY_AQUI"
-RPZ_ZONE_FILE="/etc/bind/zones/db.rpz.zone"
+ANABLOCK_FILE="/etc/unbound/anablock.conf"
 
-# Verificar se o arquivo da zona RPZ existe
-if [ ! -f "$RPZ_ZONE_FILE" ]; then
-    echo "$(date): RPZ zone file not found: $RPZ_ZONE_FILE" >> /opt/dns-monitor/collector.log
+if [ ! -f "$ANABLOCK_FILE" ]; then
+    echo "$(date): anablock.conf not found: $ANABLOCK_FILE" >> /opt/dns-monitor/collector.log
     exit 1
 fi
 
-# Obter serial da zona
-ZONE_SERIAL=$(grep -oP '\d{10}' "$RPZ_ZONE_FILE" | head -1 || echo "0")
+# Tamanho do arquivo
+LIST_SIZE=$(wc -c < "$ANABLOCK_FILE")
 
-# Obter tamanho do arquivo
-LIST_SIZE=$(wc -c < "$RPZ_ZONE_FILE")
+# Contar domínios únicos
+DOMAIN_COUNT=$(grep -c 'local-zone:' "$ANABLOCK_FILE" 2>/dev/null || echo 0)
 
-# Contar domínios (linhas com CNAME .)
-DOMAIN_COUNT=$(grep -c "CNAME \." "$RPZ_ZONE_FILE" 2>/dev/null || echo 0)
+# Gerar serial baseado na data de modificação
+ZONE_SERIAL=$(stat -c %Y "$ANABLOCK_FILE" 2>/dev/null || date +%s)
 
-# Extrair domínios e categorias
-# Formato esperado: dominio.com CNAME .  ; categoria: Apostas
+# Extrair domínios com categorias
 DOMAINS=$(python3 -c "
-import json, re, sys
+import json, re
 
 domains = []
-with open('$RPZ_ZONE_FILE', 'r') as f:
+categories = {
+    'Apostas': ['bet', 'game', 'casino', 'poker', 'slot', 'jackpot', 'spin', 'luck', 'win', 'play', 'gambl', 'bingo', 'roleta', 'aposta', 'vip'],
+    'Streaming/Pirataria': ['torrent', 'pirat', 'stream', 'flix', 'movie', 'serie', 'animes', 'mega', 'download'],
+    'Malware/Tracking': ['malware', 'track', 'adware', 'phish', 'spam', 'virus', 'trojan'],
+}
+
+def categorize(domain):
+    d = domain.lower()
+    for cat, keywords in categories.items():
+        for kw in keywords:
+            if kw in d:
+                return cat
+    return 'Outros'
+
+with open('$ANABLOCK_FILE', 'r') as f:
     for line in f:
-        line = line.strip()
-        if 'CNAME' not in line or line.startswith(';') or line.startswith('\$'):
-            continue
-        parts = line.split()
-        if len(parts) >= 3:
-            domain = parts[0].rstrip('.')
-            category = 'Outros'
-            comment = line.split(';')
-            if len(comment) > 1:
-                cat_match = re.search(r'categoria:\s*(\S+)', comment[1], re.IGNORECASE)
-                if cat_match:
-                    category = cat_match.group(1)
-            domains.append({'domain': domain, 'category': category})
+        m = re.match(r'local-zone:\s*\"([^\"]+)\"', line.strip())
+        if m:
+            domain = m.group(1)
+            domains.append({'domain': domain, 'category': categorize(domain)})
 
 # Limitar a 1000 por request
 print(json.dumps(domains[:1000]))
 " 2>/dev/null || echo "[]")
 
-# Montar JSON
 JSON=$(cat <<EOF
 {
   "zone_status": "active",
@@ -63,7 +64,6 @@ JSON=$(cat <<EOF
 EOF
 )
 
-# Enviar
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
     -X POST "$API_URL/ingest/rpz-list" \
     -H "Authorization: Bearer $API_KEY" \
@@ -71,4 +71,4 @@ HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
     -d "$JSON" \
     --max-time 30)
 
-echo "$(date): RPZ list sent - $DOMAIN_COUNT domains, serial $ZONE_SERIAL (HTTP $HTTP_CODE)" >> /opt/dns-monitor/collector.log
+echo "$(date): RPZ list sent - $DOMAIN_COUNT domains (HTTP $HTTP_CODE)" >> /opt/dns-monitor/collector.log

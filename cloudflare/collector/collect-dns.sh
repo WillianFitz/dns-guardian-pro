@@ -1,20 +1,21 @@
 #!/bin/bash
 # =============================================================
-# DNS Monitor - Coletor de Queries DNS (BIND9)
+# DNS Monitor - Coletor de Queries DNS (Unbound)
 # Instalar no servidor DNS: /opt/dns-monitor/collect-dns.sh
 # Cron: * * * * * /opt/dns-monitor/collect-dns.sh
 # =============================================================
 
 # CONFIGURAÇÃO - ALTERE ESTES VALORES
 API_URL="https://dns-monitor-api.seudominio.workers.dev"
-API_KEY="SUA_API_KEY_AQUI"  # Gerada ao cadastrar a empresa no admin
+API_KEY="SUA_API_KEY_AQUI"
 
-# Caminhos dos logs do BIND
-QUERY_LOG="/var/log/named/queries.log"
+# Caminho do log do Unbound
+UNBOUND_LOG="/var/log/unbound/unbound.log"
 LAST_POS_FILE="/opt/dns-monitor/.last_pos_dns"
 TEMP_FILE="/tmp/dns-queries-batch.json"
+# Arquivo de bloqueios da ANATEL (para identificar domínios bloqueados)
+ANABLOCK_FILE="/etc/unbound/anablock.conf"
 
-# Criar diretório se não existir
 mkdir -p /opt/dns-monitor
 
 # Obter posição anterior
@@ -24,10 +25,9 @@ else
     LAST_POS=0
 fi
 
-# Obter tamanho atual do arquivo
-CURRENT_SIZE=$(wc -c < "$QUERY_LOG" 2>/dev/null || echo 0)
+CURRENT_SIZE=$(wc -c < "$UNBOUND_LOG" 2>/dev/null || echo 0)
 
-# Se o arquivo foi rotacionado (menor que posição anterior)
+# Se o arquivo foi rotacionado
 if [ "$CURRENT_SIZE" -lt "$LAST_POS" ]; then
     LAST_POS=0
 fi
@@ -37,11 +37,8 @@ if [ "$CURRENT_SIZE" -eq "$LAST_POS" ]; then
     exit 0
 fi
 
-# Ler novas linhas e parsear
-# Formato BIND query log:
-# 06-Mar-2026 10:30:45.123 queries: info: client @0x... 100.64.1.134#12345 (www.google.com): query: www.google.com IN A +E(0)K (170.245.94.203)
-
-python3 /opt/dns-monitor/parse-queries.py "$QUERY_LOG" "$LAST_POS" > "$TEMP_FILE"
+# Parsear com Python
+python3 /opt/dns-monitor/parse-unbound.py "$UNBOUND_LOG" "$LAST_POS" "$ANABLOCK_FILE" > "$TEMP_FILE"
 
 # Verificar se há dados
 if [ ! -s "$TEMP_FILE" ] || [ "$(cat $TEMP_FILE)" = '{"queries":[]}' ]; then
