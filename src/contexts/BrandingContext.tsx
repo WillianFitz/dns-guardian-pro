@@ -30,35 +30,7 @@ const defaultBranding: BrandingConfig = {
   logoUrl: null,
 };
 
-const defaultCompanies: Company[] = [
-  {
-    id: '1',
-    name: 'Teleriza Telecom',
-    slug: 'teleriza',
-    branding: { systemName: 'Teleriza DNS Monitor', logoUrl: null },
-    dnsServers: ['170.245.94.203', '170.245.94.204'],
-    active: true,
-    createdAt: '2024-01-15',
-  },
-  {
-    id: '2',
-    name: 'NetSpeed Internet',
-    slug: 'netspeed',
-    branding: { systemName: 'NetSpeed DNS Guard', logoUrl: null },
-    dnsServers: ['192.168.1.1'],
-    active: true,
-    createdAt: '2024-03-20',
-  },
-  {
-    id: '3',
-    name: 'FibraMax Telecom',
-    slug: 'fibramax',
-    branding: { systemName: 'FibraMax Security DNS', logoUrl: null },
-    dnsServers: ['10.0.0.1', '10.0.0.2'],
-    active: false,
-    createdAt: '2024-06-10',
-  },
-];
+const defaultCompanies: Company[] = [];
 
 const BrandingContext = createContext<BrandingContextType>({
   currentBranding: defaultBranding,
