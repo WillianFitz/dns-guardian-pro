@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import { useBranding } from '@/contexts/BrandingContext';
+import { getLoggedUser, clearAuth, isAuthenticated } from '@/lib/auth';
 import { Monitor, User, LogOut, Shield } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -18,8 +19,20 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const { currentBranding, isAdmin, setIsAdmin } = useBranding();
   const navigate = useNavigate();
   const location = useLocation();
+  const loggedUser = getLoggedUser();
 
   const activeTab = tabs.find(t => t.path === location.pathname)?.id || 'dns';
+
+  const handleLogout = () => {
+    if (location.pathname === '/admin') {
+      setIsAdmin(false);
+      localStorage.removeItem('dns_admin_logged');
+      navigate('/');
+    } else {
+      clearAuth();
+      navigate('/login', { replace: true });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -51,15 +64,11 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             </button>
             <div className="flex items-center gap-2 text-sm">
               <User className="w-4 h-4" />
-              <span>admin</span>
+              <span>{loggedUser?.email ?? (isAdmin ? 'admin' : '—')}</span>
             </div>
             <button
               className="flex items-center gap-1 text-sm opacity-80 hover:opacity-100 transition-opacity"
-              onClick={() => {
-                setIsAdmin(false);
-                localStorage.removeItem('dns_admin_logged');
-                navigate('/');
-              }}
+              onClick={handleLogout}
             >
               <LogOut className="w-4 h-4" />
               Sair

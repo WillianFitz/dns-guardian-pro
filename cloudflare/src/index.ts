@@ -39,6 +39,79 @@ function validateAdmin(request: Request, env: Env): boolean {
   return auth === `Bearer ${env.ADMIN_SECRET}`;
 }
 
+// --- Auth: hash de senha (PBKDF2) ---
+async function hashPassword(password: string): Promise<string> {
+  const enc = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    key,
+    256
+  );
+  const hash = new Uint8Array(bits);
+  const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+  const hashHex = Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('');
+  return `${saltHex}:${hashHex}`;
+}
+
+async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  const [saltHex, hashHex] = stored.split(':');
+  if (!saltHex || !hashHex) return false;
+  const salt = new Uint8Array(saltHex.match(/.{2}/g)!.map(h => parseInt(h, 16)));
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    key,
+    256
+  );
+  const hash = new Uint8Array(bits);
+  const expected = Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex === expected;
+}
+
+// --- Token de login (empresa): payload assinado com HMAC ---
+const TOKEN_EXP_DAYS = 7;
+async function signToken(payload: { userId: number; companySlug: string }, secret: string): Promise<string> {
+  const data = JSON.stringify({ ...payload, exp: Date.now() + TOKEN_EXP_DAYS * 86400000 });
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(data));
+  const b64 = btoa(unescape(encodeURIComponent(data)));
+  const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig)));
+  return `${b64}.${sigB64}`;
+}
+async function verifyToken(token: string, env: Env): Promise<{ userId: number; companySlug: string } | null> {
+  try {
+    const [b64, sigB64] = token.split('.');
+    if (!b64 || !sigB64) return null;
+    const data = JSON.parse(decodeURIComponent(escape(atob(b64))));
+    if (!data.userId || !data.companySlug || !data.exp || data.exp < Date.now()) return null;
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey('raw', enc.encode(env.ADMIN_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const payloadStr = decodeURIComponent(escape(atob(b64)));
+    const sig = Uint8Array.from(atob(sigB64), c => c.charCodeAt(0));
+    const isValid = await crypto.subtle.verify('HMAC', key, sig, enc.encode(payloadStr));
+    if (!isValid) return null;
+    const row = await env.DB.prepare('SELECT id, company_slug FROM users WHERE id = ?').bind(data.userId).first();
+    if (!row || (row as any).company_slug !== data.companySlug) return null;
+    return { userId: data.userId, companySlug: data.companySlug };
+  } catch {
+    return null;
+  }
+}
+
+// Company do request: token de usuário (login empresa) ou query param (retrocompat)
+async function getCompanySlugFromRequest(request: Request, url: URL, env: Env): Promise<string | null> {
+  const auth = request.headers.get('Authorization')?.replace('Bearer ', '');
+  if (auth && auth !== env.ADMIN_SECRET) {
+    const decoded = await verifyToken(auth, env);
+    if (decoded) return decoded.companySlug;
+  }
+  return url.searchParams.get('company') || null;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -182,9 +255,33 @@ export default {
       }
 
       // ==========================================
+      // LOGIN (usuário da empresa)
+      // ==========================================
+      if (path === '/auth/login' && request.method === 'POST') {
+        const body: any = await request.json();
+        const email = (body.email || '').trim().toLowerCase();
+        const password = body.password;
+        if (!email || !password) return errorResponse('Email e senha obrigatórios', 400, origin);
+        const user = await env.DB.prepare('SELECT id, password_hash, company_slug, name, role FROM users WHERE email = ?')
+          .bind(email).first() as any;
+        if (!user || !user.company_slug) return errorResponse('Credenciais inválidas', 401, origin);
+        const ok = await verifyPassword(password, user.password_hash);
+        if (!ok) return errorResponse('Credenciais inválidas', 401, origin);
+        const token = await signToken({ userId: user.id, companySlug: user.company_slug }, env.ADMIN_SECRET);
+        return jsonResponse({
+          token,
+          companySlug: user.company_slug,
+          user: { name: user.name, email, role: user.role },
+        }, 200, origin);
+      }
+
+      // ==========================================
       // DASHBOARD ENDPOINTS (chamados pelo frontend)
       // ==========================================
-      const companySlug = url.searchParams.get('company') || 'default';
+      const companySlug = await getCompanySlugFromRequest(request, url, env);
+      if (!companySlug) {
+        return errorResponse('Faça login ou informe company=', 401, origin);
+      }
 
       // GET /dns/stats
       if (path === '/dns/stats' && request.method === 'GET') {
@@ -505,6 +602,53 @@ export default {
         if (path === '/admin/api-keys' && request.method === 'GET') {
           const results = await env.DB.prepare('SELECT * FROM api_keys ORDER BY created_at DESC').all();
           return jsonResponse(results.results, 200, origin);
+        }
+
+        // GET /admin/users (lista usuários por empresa ou todos)
+        if (path === '/admin/users' && request.method === 'GET') {
+          const byCompany = url.searchParams.get('company');
+          let results;
+          if (byCompany) {
+            results = await env.DB.prepare('SELECT id, email, name, role, company_slug, created_at FROM users WHERE company_slug = ? ORDER BY created_at DESC')
+              .bind(byCompany).all();
+          } else {
+            results = await env.DB.prepare('SELECT id, email, name, role, company_slug, created_at FROM users ORDER BY company_slug, created_at DESC').all();
+          }
+          return jsonResponse(results.results.map((u: any) => ({
+            id: u.id.toString(),
+            email: u.email,
+            name: u.name,
+            role: u.role,
+            companySlug: u.company_slug,
+            createdAt: u.created_at,
+          })), 200, origin);
+        }
+
+        // POST /admin/users (criar usuário da empresa: email, senha, company_slug)
+        if (path === '/admin/users' && request.method === 'POST') {
+          const body: any = await request.json();
+          const email = (body.email || '').trim().toLowerCase();
+          const password = body.password;
+          const companySlug = (body.companySlug || body.company_slug || '').trim();
+          const name = (body.name || '').trim() || null;
+          const role = body.role || 'viewer';
+          if (!email || !password || !companySlug) return errorResponse('email, password e companySlug obrigatórios', 400, origin);
+          const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
+          if (existing) return errorResponse('Email já cadastrado', 400, origin);
+          const company = await env.DB.prepare('SELECT id FROM companies WHERE slug = ?').bind(companySlug).first();
+          if (!company) return errorResponse('Empresa não encontrada', 400, origin);
+          const passwordHash = await hashPassword(password);
+          await env.DB.prepare(
+            'INSERT INTO users (email, password_hash, name, role, company_slug) VALUES (?, ?, ?, ?, ?)'
+          ).bind(email, passwordHash, name, role, companySlug).run();
+          return jsonResponse({ ok: true, message: 'Usuário criado' }, 201, origin);
+        }
+
+        // DELETE /admin/users/:id
+        const userMatch = path.match(/^\/admin\/users\/(\d+)$/);
+        if (userMatch && request.method === 'DELETE') {
+          await env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userMatch[1]).run();
+          return jsonResponse({ ok: true }, 200, origin);
         }
       }
 

@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
-import { Plus, Pencil, Trash2, Building2, Server, Palette, Lock, User as UserIcon, AlertCircle } from 'lucide-react';
-import { useCompanies, createCompanyApi, updateCompanyApi, deleteCompanyApi, type CompanyData, isApiConfigured } from '@/services/api';
+import { Plus, Pencil, Trash2, Building2, Server, Palette, Lock, User as UserIcon, AlertCircle, Users } from 'lucide-react';
+import { useCompanies, createCompanyApi, updateCompanyApi, deleteCompanyApi, useUsers, createUserApi, deleteUserApi, type CompanyData, type UserData, isApiConfigured } from '@/services/api';
 import { useBranding } from '@/contexts/BrandingContext';
 
 const ADMIN_USER = import.meta.env.VITE_ADMIN_USER || 'admin';
@@ -17,8 +17,14 @@ const AdminPage = () => {
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const { data: companies = [], isLoading, error, refetch } = useCompanies();
+  const [userFilterCompany, setUserFilterCompany] = useState<string>('');
+  const { data: users = [], isLoading: usersLoading, refetch: refetchUsers } = useUsers(userFilterCompany || undefined);
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showUserForm, setShowUserForm] = useState(false);
+  const [userForm, setUserForm] = useState({ email: '', password: '', companySlug: '', name: '' });
+  const [userFormError, setUserFormError] = useState<string | null>(null);
+  const [savingUser, setSavingUser] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -122,6 +128,41 @@ const AdminPage = () => {
     try {
       await updateCompanyApi(company.id, { ...company, active: !company.active });
       await refetch();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleCreateUser = async (e: FormEvent) => {
+    e.preventDefault();
+    setUserFormError(null);
+    if (!userForm.email.trim() || !userForm.password || !userForm.companySlug) {
+      setUserFormError('Preencha e-mail, senha e empresa.');
+      return;
+    }
+    setSavingUser(true);
+    try {
+      await createUserApi({
+        email: userForm.email.trim().toLowerCase(),
+        password: userForm.password,
+        companySlug: userForm.companySlug,
+        name: userForm.name.trim() || undefined,
+      });
+      setUserForm({ email: '', password: '', companySlug: '', name: '' });
+      setShowUserForm(false);
+      await refetchUsers();
+    } catch (err: any) {
+      setUserFormError(err.message || 'Erro ao criar usuário.');
+    } finally {
+      setSavingUser(false);
+    }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    if (!confirm('Excluir este usuário? Ele não poderá mais acessar o painel.')) return;
+    try {
+      await deleteUserApi(id);
+      await refetchUsers();
     } catch (err) {
       console.error(err);
     }
@@ -400,6 +441,115 @@ const AdminPage = () => {
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </button>
                     </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Usuários por empresa */}
+      <div className="section-card">
+        <h3 className="text-lg font-semibold flex items-center gap-2 mb-4">
+          <Users className="w-5 h-5 text-primary" />
+          Usuários por empresa
+        </h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Cada empresa pode ter um ou mais usuários. Eles acessam o painel em /login com e-mail e senha e veem apenas os dados da própria empresa.
+        </p>
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <select
+            value={userFilterCompany}
+            onChange={e => setUserFilterCompany(e.target.value)}
+            className="border rounded-lg px-3 py-2 text-sm bg-background"
+          >
+            <option value="">Todas as empresas</option>
+            {companies.map(c => (
+              <option key={c.id} value={c.slug}>{c.name} ({c.slug})</option>
+            ))}
+          </select>
+          <button
+            onClick={() => { setShowUserForm(true); setUserFormError(null); setUserForm({ email: '', password: '', companySlug: userForm.companySlug || (companies[0]?.slug ?? ''), name: '' }); }}
+            className="flex items-center gap-2 bg-primary text-primary-foreground px-3 py-2 rounded-lg text-sm font-medium hover:opacity-90"
+          >
+            <Plus className="w-4 h-4" />
+            Novo usuário
+          </button>
+        </div>
+        {showUserForm && (
+          <form onSubmit={handleCreateUser} className="mb-4 p-4 border rounded-lg bg-muted/30 space-y-3">
+            {userFormError && (
+              <div className="text-sm text-destructive">{userFormError}</div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input
+                type="email"
+                value={userForm.email}
+                onChange={e => setUserForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="E-mail"
+                className="border rounded-lg px-3 py-2 text-sm"
+              />
+              <input
+                type="password"
+                value={userForm.password}
+                onChange={e => setUserForm(f => ({ ...f, password: e.target.value }))}
+                placeholder="Senha"
+                className="border rounded-lg px-3 py-2 text-sm"
+              />
+              <select
+                value={userForm.companySlug}
+                onChange={e => setUserForm(f => ({ ...f, companySlug: e.target.value }))}
+                className="border rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">Selecione a empresa</option>
+                {companies.map(c => (
+                  <option key={c.id} value={c.slug}>{c.name}</option>
+                ))}
+              </select>
+              <input
+                value={userForm.name}
+                onChange={e => setUserForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="Nome (opcional)"
+                className="border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button type="submit" disabled={savingUser} className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm disabled:opacity-60">
+                {savingUser ? 'Salvando...' : 'Criar usuário'}
+              </button>
+              <button type="button" onClick={() => setShowUserForm(false)} className="px-4 py-2 rounded-lg text-sm bg-muted hover:bg-accent">
+                Cancelar
+              </button>
+            </div>
+          </form>
+        )}
+        {usersLoading ? (
+          <p className="text-sm text-muted-foreground">Carregando usuários...</p>
+        ) : users.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nenhum usuário cadastrado. Crie um para a empresa acessar o painel com login.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left">
+                <th className="pb-2 font-semibold text-muted-foreground">E-mail</th>
+                <th className="pb-2 font-semibold text-muted-foreground">Nome</th>
+                <th className="pb-2 font-semibold text-muted-foreground">Empresa</th>
+                <th className="pb-2 font-semibold text-muted-foreground">Perfil</th>
+                <th className="pb-2 font-semibold text-muted-foreground text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u: UserData) => (
+                <tr key={u.id} className="border-b last:border-0">
+                  <td className="py-2">{u.email}</td>
+                  <td className="py-2">{u.name || '—'}</td>
+                  <td className="py-2">{u.companySlug}</td>
+                  <td className="py-2">{u.role}</td>
+                  <td className="py-2 text-right">
+                    <button onClick={() => handleDeleteUser(u.id)} className="p-1.5 rounded hover:bg-muted text-destructive">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </td>
                 </tr>
               ))}

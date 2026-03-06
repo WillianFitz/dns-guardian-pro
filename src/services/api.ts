@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { getToken, getCompanySlug as getAuthCompany } from '@/lib/auth';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
@@ -12,8 +13,14 @@ async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> 
   if (!API_BASE_URL) {
     throw new Error('VITE_API_URL não configurada');
   }
+  const token = getToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string>),
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${API_BASE_URL}${endpoint}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers,
     ...options,
   });
   if (!res.ok) throw new Error(`Erro na API: ${res.status}`);
@@ -29,10 +36,10 @@ async function fetchAdminApi<T>(endpoint: string, options?: RequestInit): Promis
   });
 }
 
-// Company slug from URL or default
+// Company slug: do login (auth) ou query ?company=
 export function getCompanySlug(): string {
   const params = new URLSearchParams(window.location.search);
-  return params.get('company') || localStorage.getItem('dns_monitor_company') || 'default';
+  return getAuthCompany() || params.get('company') || 'default';
 }
 
 function withCompany(endpoint: string, extraParams = ''): string {
@@ -358,5 +365,53 @@ export async function deleteCompanyApi(id: string) {
 // Check if API is configured
 export function isApiConfigured(): boolean {
   return !!API_BASE_URL;
+}
+
+// Login (usuário da empresa)
+export interface LoginResponse {
+  token: string;
+  companySlug: string;
+  user: { name: string | null; email: string; role: string };
+}
+
+export async function loginApi(email: string, password: string): Promise<LoginResponse> {
+  const res = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const json = await res.json();
+  if (!res.ok || !json.success) throw new Error(json.error || 'Login falhou');
+  return json.data;
+}
+
+// Admin: usuários por empresa
+export interface UserData {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  companySlug: string;
+  createdAt: string;
+}
+
+export function useUsers(companySlug?: string) {
+  const query = companySlug ? `?company=${encodeURIComponent(companySlug)}` : '';
+  return useQuery({
+    queryKey: ['admin-users', companySlug],
+    queryFn: () => fetchAdminApi<UserData[]>(`/admin/users${query}`),
+    retry: 1,
+  });
+}
+
+export async function createUserApi(data: { email: string; password: string; companySlug: string; name?: string; role?: string }) {
+  return fetchAdminApi<{ ok: boolean }>('/admin/users', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteUserApi(id: string) {
+  return fetchAdminApi<{ ok: boolean }>(`/admin/users/${id}`, { method: 'DELETE' });
 }
 
