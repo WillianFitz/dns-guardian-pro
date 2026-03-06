@@ -11,6 +11,7 @@ const AdminPage = () => {
     slug: '',
     systemName: '',
     dnsServers: '',
+    logoUrl: '',
   });
 
   const handleAdd = () => {
@@ -18,8 +19,8 @@ const AdminPage = () => {
       id: Date.now().toString(),
       name: form.name,
       slug: form.slug,
-      branding: { systemName: form.systemName, logoUrl: null },
-      dnsServers: form.dnsServers.split(',').map(s => s.trim()),
+      branding: { systemName: form.systemName, logoUrl: form.logoUrl || null },
+      dnsServers: form.dnsServers.split(',').map(s => s.trim()).filter(Boolean),
       active: true,
       createdAt: new Date().toISOString().split('T')[0],
     };
@@ -34,6 +35,7 @@ const AdminPage = () => {
       slug: company.slug,
       systemName: company.branding.systemName,
       dnsServers: company.dnsServers.join(', '),
+      logoUrl: company.branding.logoUrl || '',
     });
     setShowForm(true);
   };
@@ -46,8 +48,8 @@ const AdminPage = () => {
               ...c,
               name: form.name,
               slug: form.slug,
-              branding: { ...c.branding, systemName: form.systemName },
-              dnsServers: form.dnsServers.split(',').map(s => s.trim()),
+              branding: { systemName: form.systemName, logoUrl: form.logoUrl || null },
+              dnsServers: form.dnsServers.split(',').map(s => s.trim()).filter(Boolean),
             }
           : c
       )
@@ -64,7 +66,7 @@ const AdminPage = () => {
   };
 
   const resetForm = () => {
-    setForm({ name: '', slug: '', systemName: '', dnsServers: '' });
+    setForm({ name: '', slug: '', systemName: '', dnsServers: '', logoUrl: '' });
     setEditingId(null);
     setShowForm(false);
   };
@@ -77,12 +79,23 @@ const AdminPage = () => {
           Painel Administrativo - Empresas
         </h2>
         <button
-          onClick={() => { setShowForm(true); setEditingId(null); setForm({ name: '', slug: '', systemName: '', dnsServers: '' }); }}
+          onClick={() => { setShowForm(true); setEditingId(null); setForm({ name: '', slug: '', systemName: '', dnsServers: '', logoUrl: '' }); }}
           className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity"
         >
           <Plus className="w-4 h-4" />
           Nova Empresa
         </button>
+      </div>
+
+      {/* API Config Info */}
+      <div className="section-card border-2 border-info/20 bg-info/5">
+        <h3 className="text-sm font-semibold text-info mb-2">⚙️ Configuração da API</h3>
+        <p className="text-xs text-muted-foreground mb-2">
+          Configure a variável de ambiente <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono">VITE_API_URL</code> no seu <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono">.env</code> com a URL do seu Cloudflare Worker:
+        </p>
+        <code className="block bg-foreground/5 p-2 rounded text-xs font-mono">
+          VITE_API_URL=https://dns-monitor-api.seu-dominio.workers.dev
+        </code>
       </div>
 
       {/* Form */}
@@ -122,6 +135,15 @@ const AdminPage = () => {
               />
             </div>
             <div>
+              <label className="block text-sm font-medium mb-1 text-muted-foreground">URL da Logo</label>
+              <input
+                value={form.logoUrl}
+                onChange={e => setForm(f => ({ ...f, logoUrl: e.target.value }))}
+                className="w-full border rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                placeholder="https://exemplo.com/logo.png"
+              />
+            </div>
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium mb-1 text-muted-foreground flex items-center gap-1">
                 <Server className="w-3.5 h-3.5" /> Servidores DNS (separados por vírgula)
               </label>
@@ -149,59 +171,74 @@ const AdminPage = () => {
 
       {/* Companies List */}
       <div className="section-card">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left">
-              <th className="pb-3 font-semibold text-muted-foreground">Empresa</th>
-              <th className="pb-3 font-semibold text-muted-foreground">Nome do Sistema</th>
-              <th className="pb-3 font-semibold text-muted-foreground">Servidores DNS</th>
-              <th className="pb-3 font-semibold text-muted-foreground">Status</th>
-              <th className="pb-3 font-semibold text-muted-foreground">Criado em</th>
-              <th className="pb-3 font-semibold text-muted-foreground text-right">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {companies.map(c => (
-              <tr key={c.id} className="border-b last:border-0">
-                <td className="py-3">
-                  <div>
-                    <p className="font-medium">{c.name}</p>
-                    <p className="text-xs text-muted-foreground">/{c.slug}</p>
-                  </div>
-                </td>
-                <td className="py-3">{c.branding.systemName}</td>
-                <td className="py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {c.dnsServers.map(s => (
-                      <span key={s} className="text-xs bg-muted px-2 py-0.5 rounded">{s}</span>
-                    ))}
-                  </div>
-                </td>
-                <td className="py-3">
-                  <button
-                    onClick={() => toggleActive(c.id)}
-                    className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                      c.active ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'
-                    }`}
-                  >
-                    {c.active ? '✅ Ativo' : '❌ Inativo'}
-                  </button>
-                </td>
-                <td className="py-3 text-muted-foreground">{c.createdAt}</td>
-                <td className="py-3 text-right">
-                  <div className="flex justify-end gap-1">
-                    <button onClick={() => handleEdit(c)} className="p-1.5 rounded hover:bg-muted transition-colors">
-                      <Pencil className="w-4 h-4 text-info" />
-                    </button>
-                    <button onClick={() => handleDelete(c.id)} className="p-1.5 rounded hover:bg-muted transition-colors">
-                      <Trash2 className="w-4 h-4 text-destructive" />
-                    </button>
-                  </div>
-                </td>
+        {companies.length === 0 ? (
+          <div className="flex items-center justify-center h-32 text-muted-foreground">
+            <div className="text-center">
+              <Building2 className="w-12 h-12 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Nenhuma empresa cadastrada</p>
+              <p className="text-xs mt-1 opacity-60">Clique em "Nova Empresa" para começar</p>
+            </div>
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left">
+                <th className="pb-3 font-semibold text-muted-foreground">Empresa</th>
+                <th className="pb-3 font-semibold text-muted-foreground">Nome do Sistema</th>
+                <th className="pb-3 font-semibold text-muted-foreground">Servidores DNS</th>
+                <th className="pb-3 font-semibold text-muted-foreground">Status</th>
+                <th className="pb-3 font-semibold text-muted-foreground">Criado em</th>
+                <th className="pb-3 font-semibold text-muted-foreground text-right">Ações</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {companies.map(c => (
+                <tr key={c.id} className="border-b last:border-0">
+                  <td className="py-3">
+                    <div className="flex items-center gap-2">
+                      {c.branding.logoUrl && (
+                        <img src={c.branding.logoUrl} alt="" className="w-6 h-6 rounded object-contain" />
+                      )}
+                      <div>
+                        <p className="font-medium">{c.name}</p>
+                        <p className="text-xs text-muted-foreground">/{c.slug}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3">{c.branding.systemName}</td>
+                  <td className="py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {c.dnsServers.map(s => (
+                        <span key={s} className="text-xs bg-muted px-2 py-0.5 rounded font-mono">{s}</span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="py-3">
+                    <button
+                      onClick={() => toggleActive(c.id)}
+                      className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                        c.active ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'
+                      }`}
+                    >
+                      {c.active ? '✅ Ativo' : '❌ Inativo'}
+                    </button>
+                  </td>
+                  <td className="py-3 text-muted-foreground">{c.createdAt}</td>
+                  <td className="py-3 text-right">
+                    <div className="flex justify-end gap-1">
+                      <button onClick={() => handleEdit(c)} className="p-1.5 rounded hover:bg-muted transition-colors">
+                        <Pencil className="w-4 h-4 text-info" />
+                      </button>
+                      <button onClick={() => handleDelete(c.id)} className="p-1.5 rounded hover:bg-muted transition-colors">
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
