@@ -284,6 +284,102 @@ export default {
       }
 
       // ==========================================
+      // ADMIN ENDPOINTS (antes do dashboard, senão /admin/* cai no "company=" e dá 401)
+      // ==========================================
+      if (path.startsWith('/admin/')) {
+        if (!validateAdmin(request, env)) return errorResponse('Unauthorized', 401, origin);
+
+        if (path === '/admin/companies' && request.method === 'GET') {
+          const results = await env.DB.prepare('SELECT * FROM companies ORDER BY created_at DESC').all();
+          return jsonResponse(results.results.map((c: any) => ({
+            id: c.id.toString(),
+            name: c.name,
+            slug: c.slug,
+            systemName: c.system_name,
+            logoUrl: c.logo_url,
+            dnsServers: JSON.parse(c.dns_servers || '[]'),
+            active: c.active === 1,
+            createdAt: c.created_at,
+          })), 200, origin);
+        }
+
+        if (path === '/admin/companies' && request.method === 'POST') {
+          const body: any = await request.json();
+          const result = await env.DB.prepare(
+            'INSERT INTO companies (name, slug, system_name, logo_url, dns_servers) VALUES (?, ?, ?, ?, ?)'
+          ).bind(body.name, body.slug, body.systemName, body.logoUrl || null, JSON.stringify(body.dnsServers || [])).run();
+          const apiKey = crypto.randomUUID();
+          await env.DB.prepare(
+            'INSERT INTO api_keys (key, company_slug, description) VALUES (?, ?, ?)'
+          ).bind(apiKey, body.slug, `Auto-generated for ${body.name}`).run();
+          return jsonResponse({ id: result.meta.last_row_id, apiKey }, 201, origin);
+        }
+
+        const companyMatch = path.match(/^\/admin\/companies\/(\d+)$/);
+        if (companyMatch && request.method === 'PUT') {
+          const id = companyMatch[1];
+          const body: any = await request.json();
+          await env.DB.prepare(
+            'UPDATE companies SET name=?, slug=?, system_name=?, logo_url=?, dns_servers=?, active=? WHERE id=?'
+          ).bind(body.name, body.slug, body.systemName, body.logoUrl || null, JSON.stringify(body.dnsServers || []), body.active ? 1 : 0, id).run();
+          return jsonResponse({ ok: true }, 200, origin);
+        }
+        if (companyMatch && request.method === 'DELETE') {
+          await env.DB.prepare('DELETE FROM companies WHERE id = ?').bind(companyMatch[1]).run();
+          return jsonResponse({ ok: true }, 200, origin);
+        }
+
+        if (path === '/admin/api-keys' && request.method === 'GET') {
+          const results = await env.DB.prepare('SELECT * FROM api_keys ORDER BY created_at DESC').all();
+          return jsonResponse(results.results, 200, origin);
+        }
+
+        if (path === '/admin/users' && request.method === 'GET') {
+          const byCompany = url.searchParams.get('company');
+          let results;
+          if (byCompany) {
+            results = await env.DB.prepare('SELECT id, email, name, role, company_slug, created_at FROM users WHERE company_slug = ? ORDER BY created_at DESC')
+              .bind(byCompany).all();
+          } else {
+            results = await env.DB.prepare('SELECT id, email, name, role, company_slug, created_at FROM users ORDER BY company_slug, created_at DESC').all();
+          }
+          return jsonResponse(results.results.map((u: any) => ({
+            id: u.id.toString(),
+            email: u.email,
+            name: u.name,
+            role: u.role,
+            companySlug: u.company_slug,
+            createdAt: u.created_at,
+          })), 200, origin);
+        }
+
+        if (path === '/admin/users' && request.method === 'POST') {
+          const body: any = await request.json();
+          const email = (body.email || '').trim().toLowerCase();
+          const password = body.password;
+          const companySlug = (body.companySlug || body.company_slug || '').trim();
+          const name = (body.name || '').trim() || null;
+          const role = body.role || 'viewer';
+          if (!email || !password || !companySlug) return errorResponse('email, password e companySlug obrigatórios', 400, origin);
+          const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
+          if (existing) return errorResponse('Email já cadastrado', 400, origin);
+          const company = await env.DB.prepare('SELECT id FROM companies WHERE slug = ?').bind(companySlug).first();
+          if (!company) return errorResponse('Empresa não encontrada', 400, origin);
+          const passwordHash = await hashPassword(password);
+          await env.DB.prepare(
+            'INSERT INTO users (email, password_hash, name, role, company_slug) VALUES (?, ?, ?, ?, ?)'
+          ).bind(email, passwordHash, name, role, companySlug).run();
+          return jsonResponse({ ok: true, message: 'Usuário criado' }, 201, origin);
+        }
+
+        const userMatch = path.match(/^\/admin\/users\/(\d+)$/);
+        if (userMatch && request.method === 'DELETE') {
+          await env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userMatch[1]).run();
+          return jsonResponse({ ok: true }, 200, origin);
+        }
+      }
+
+      // ==========================================
       // DASHBOARD ENDPOINTS (chamados pelo frontend)
       // ==========================================
       const companySlug = await getCompanySlugFromRequest(request, url, env);
@@ -548,116 +644,6 @@ export default {
           'SELECT pid, name, cpu_percent as cpu, memory_percent as memory FROM system_processes WHERE company_slug = ? ORDER BY memory_percent DESC'
         ).bind(companySlug).all();
         return jsonResponse(results.results, 200, origin);
-      }
-
-      // ==========================================
-      // ADMIN ENDPOINTS
-      // ==========================================
-
-      if (path.startsWith('/admin/')) {
-        if (!validateAdmin(request, env)) return errorResponse('Unauthorized', 401, origin);
-
-        // GET /admin/companies
-        if (path === '/admin/companies' && request.method === 'GET') {
-          const results = await env.DB.prepare('SELECT * FROM companies ORDER BY created_at DESC').all();
-          return jsonResponse(results.results.map((c: any) => ({
-            id: c.id.toString(),
-            name: c.name,
-            slug: c.slug,
-            systemName: c.system_name,
-            logoUrl: c.logo_url,
-            dnsServers: JSON.parse(c.dns_servers || '[]'),
-            active: c.active === 1,
-            createdAt: c.created_at,
-          })), 200, origin);
-        }
-
-        // POST /admin/companies
-        if (path === '/admin/companies' && request.method === 'POST') {
-          const body: any = await request.json();
-          const result = await env.DB.prepare(
-            'INSERT INTO companies (name, slug, system_name, logo_url, dns_servers) VALUES (?, ?, ?, ?, ?)'
-          ).bind(body.name, body.slug, body.systemName, body.logoUrl || null, JSON.stringify(body.dnsServers || [])).run();
-
-          // Gerar API key para o coletor
-          const apiKey = crypto.randomUUID();
-          await env.DB.prepare(
-            'INSERT INTO api_keys (key, company_slug, description) VALUES (?, ?, ?)'
-          ).bind(apiKey, body.slug, `Auto-generated for ${body.name}`).run();
-
-          return jsonResponse({ id: result.meta.last_row_id, apiKey }, 201, origin);
-        }
-
-        // PUT /admin/companies/:id
-        const companyMatch = path.match(/^\/admin\/companies\/(\d+)$/);
-        if (companyMatch && request.method === 'PUT') {
-          const id = companyMatch[1];
-          const body: any = await request.json();
-          await env.DB.prepare(
-            'UPDATE companies SET name=?, slug=?, system_name=?, logo_url=?, dns_servers=?, active=? WHERE id=?'
-          ).bind(body.name, body.slug, body.systemName, body.logoUrl || null, JSON.stringify(body.dnsServers || []), body.active ? 1 : 0, id).run();
-          return jsonResponse({ ok: true }, 200, origin);
-        }
-
-        // DELETE /admin/companies/:id
-        if (companyMatch && request.method === 'DELETE') {
-          const id = companyMatch[1];
-          await env.DB.prepare('DELETE FROM companies WHERE id = ?').bind(id).run();
-          return jsonResponse({ ok: true }, 200, origin);
-        }
-
-        // GET /admin/api-keys
-        if (path === '/admin/api-keys' && request.method === 'GET') {
-          const results = await env.DB.prepare('SELECT * FROM api_keys ORDER BY created_at DESC').all();
-          return jsonResponse(results.results, 200, origin);
-        }
-
-        // GET /admin/users (lista usuários por empresa ou todos)
-        if (path === '/admin/users' && request.method === 'GET') {
-          const byCompany = url.searchParams.get('company');
-          let results;
-          if (byCompany) {
-            results = await env.DB.prepare('SELECT id, email, name, role, company_slug, created_at FROM users WHERE company_slug = ? ORDER BY created_at DESC')
-              .bind(byCompany).all();
-          } else {
-            results = await env.DB.prepare('SELECT id, email, name, role, company_slug, created_at FROM users ORDER BY company_slug, created_at DESC').all();
-          }
-          return jsonResponse(results.results.map((u: any) => ({
-            id: u.id.toString(),
-            email: u.email,
-            name: u.name,
-            role: u.role,
-            companySlug: u.company_slug,
-            createdAt: u.created_at,
-          })), 200, origin);
-        }
-
-        // POST /admin/users (criar usuário da empresa: email, senha, company_slug)
-        if (path === '/admin/users' && request.method === 'POST') {
-          const body: any = await request.json();
-          const email = (body.email || '').trim().toLowerCase();
-          const password = body.password;
-          const companySlug = (body.companySlug || body.company_slug || '').trim();
-          const name = (body.name || '').trim() || null;
-          const role = body.role || 'viewer';
-          if (!email || !password || !companySlug) return errorResponse('email, password e companySlug obrigatórios', 400, origin);
-          const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(email).first();
-          if (existing) return errorResponse('Email já cadastrado', 400, origin);
-          const company = await env.DB.prepare('SELECT id FROM companies WHERE slug = ?').bind(companySlug).first();
-          if (!company) return errorResponse('Empresa não encontrada', 400, origin);
-          const passwordHash = await hashPassword(password);
-          await env.DB.prepare(
-            'INSERT INTO users (email, password_hash, name, role, company_slug) VALUES (?, ?, ?, ?, ?)'
-          ).bind(email, passwordHash, name, role, companySlug).run();
-          return jsonResponse({ ok: true, message: 'Usuário criado' }, 201, origin);
-        }
-
-        // DELETE /admin/users/:id
-        const userMatch = path.match(/^\/admin\/users\/(\d+)$/);
-        if (userMatch && request.method === 'DELETE') {
-          await env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userMatch[1]).run();
-          return jsonResponse({ ok: true }, 200, origin);
-        }
       }
 
       return errorResponse('Not found', 404, origin);
