@@ -14,7 +14,7 @@ Com log-queries: yes no unbound.conf:
 import sys
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
 def load_blocked_domains(anablock_file):
     """Carrega domínios bloqueados do anablock.conf do Unbound"""
@@ -114,9 +114,11 @@ def parse_unbound_log(log_file, byte_offset=0, anablock_file=None):
                     is_blocked = domain_clean in blocked_domains
 
                     try:
-                        timestamp = datetime.fromtimestamp(int(timestamp_unix)).strftime('%Y-%m-%dT%H:%M:%S')
+                        # timestamp_unix no log Unbound é UTC; gravamos em UTC para
+                        # bater com datetime('now') do D1/Cloudflare
+                        timestamp = datetime.utcfromtimestamp(int(timestamp_unix)).strftime('%Y-%m-%dT%H:%M:%S')
                     except:
-                        timestamp = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+                        timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
 
                     # Contagens gerais
                     if is_blocked:
