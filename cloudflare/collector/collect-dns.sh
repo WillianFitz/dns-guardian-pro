@@ -18,17 +18,19 @@ ANABLOCK_FILE="/etc/unbound/anablock.conf"
 
 mkdir -p /opt/dns-monitor
 
+CURRENT_SIZE=$(wc -c < "$UNBOUND_LOG" 2>/dev/null || echo 0)
+
 # Obter posição anterior
 if [ -f "$LAST_POS_FILE" ]; then
     LAST_POS=$(cat "$LAST_POS_FILE")
 else
-    LAST_POS=0
+    # Primeira execução: começar do fim do arquivo (não reprocessar histórico)
+    LAST_POS=$CURRENT_SIZE
 fi
-
-CURRENT_SIZE=$(wc -c < "$UNBOUND_LOG" 2>/dev/null || echo 0)
 
 # Se o arquivo foi rotacionado
 if [ "$CURRENT_SIZE" -lt "$LAST_POS" ]; then
+    # Arquivo novo: começar do começo
     LAST_POS=0
 fi
 
