@@ -433,7 +433,6 @@ export default {
       if (path === '/dns/activity' && request.method === 'GET') {
         const period = url.searchParams.get('period') || '1h';
         const hours = { '1h': 1, '3h': 3, '6h': 6, '12h': 12, '24h': 24 }[period] || 1;
-        const since = new Date(Date.now() - hours * 3600000).toISOString();
         const intervalMin = Math.max(1, Math.round((hours * 60) / 12));
 
         const results = await env.DB.prepare(`
@@ -442,10 +441,10 @@ export default {
             SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) as accepted,
             SUM(CASE WHEN status = 'denied' THEN 1 ELSE 0 END) as denied
           FROM dns_queries
-          WHERE company_slug = ? AND created_at >= ?
+          WHERE company_slug = ? AND created_at >= datetime('now', '-${hours} hours')
           GROUP BY time_bucket
           ORDER BY time_bucket ASC
-        `).bind(companySlug, since).all();
+        `).bind(companySlug).all();
 
         return jsonResponse(results.results.map((r: any) => ({
           time: r.time_bucket,
@@ -516,7 +515,6 @@ export default {
       if (path === '/rpz/activity' && request.method === 'GET') {
         const period = url.searchParams.get('period') || '1h';
         const hours = { '1h': 1, '3h': 3, '6h': 6, '12h': 12, '24h': 24 }[period] || 1;
-        const since = new Date(Date.now() - hours * 3600000).toISOString();
         const intervalMin = Math.max(1, Math.round((hours * 60) / 12));
 
         const results = await env.DB.prepare(`
@@ -524,9 +522,9 @@ export default {
             strftime('%Y-%m-%d %H:', created_at) || printf('%02d', (CAST(strftime('%M', created_at) AS INTEGER) / ${intervalMin}) * ${intervalMin}) as time_bucket,
             COUNT(*) as blocked
           FROM rpz_blocks
-          WHERE company_slug = ? AND created_at >= ?
+          WHERE company_slug = ? AND created_at >= datetime('now', '-${hours} hours')
           GROUP BY time_bucket ORDER BY time_bucket ASC
-        `).bind(companySlug, since).all();
+        `).bind(companySlug).all();
 
         return jsonResponse(results.results.map((r: any) => ({ time: r.time_bucket, blocked: r.blocked })), 200, origin);
       }
