@@ -1,13 +1,14 @@
-import { Cpu, HardDrive, Clock, MemoryStick } from 'lucide-react';
+import { Cpu, HardDrive, Clock, MemoryStick, FileText } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import DataState from '@/components/DataState';
-import { useSystemResources, useCpuMemory, useNetworkTraffic, useProcesses } from '@/services/api';
+import { useSystemResources, useCpuMemory, useNetworkTraffic, useProcesses, useSystemLogs } from '@/services/api';
 
 const SystemPage = () => {
   const resources = useSystemResources();
   const cpuMem = useCpuMemory();
   const network = useNetworkTraffic();
   const processes = useProcesses();
+  const logs = useSystemLogs();
 
   const r = resources.data;
 
@@ -106,9 +107,23 @@ const SystemPage = () => {
 
         <div className="section-card">
           <h2 className="text-lg font-semibold">📄 Logs do Sistema</h2>
-          <div className="flex items-center justify-center h-48 text-muted-foreground">
-            <p>📁 Nenhum log encontrado</p>
-          </div>
+          <DataState
+            isLoading={logs.isLoading}
+            isError={logs.isError}
+            isEmpty={!logs.data?.length}
+            icon={<FileText className="w-12 h-12" />}
+            emptyMessage="Nenhum log encontrado"
+            height="h-48"
+          >
+            <div className="h-48 overflow-auto text-xs font-mono bg-muted/40 rounded-md p-2 space-y-1">
+              {logs.data?.map((log, idx) => (
+                <div key={idx} className="flex flex-col">
+                  <span className="text-muted-foreground">{log.createdAt}</span>
+                  <span>{log.message}</span>
+                </div>
+              ))}
+            </div>
+          </DataState>
         </div>
       </div>
     </div>

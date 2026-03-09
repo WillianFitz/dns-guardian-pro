@@ -60,7 +60,15 @@ DISK=$(fix_float "$DISK")
 DOWNLOAD=$(fix_float "$DOWNLOAD")
 UPLOAD=$(fix_float "$UPLOAD")
 
-# Montar JSON simples e sempre válido (sem usar printf de float)
+# Coletar processos (top 10 por memória) para exibir no painel
+PROCESSES_RAW=$(ps aux --sort=-%mem 2>/dev/null | head -11 | tail -10 | awk '{printf "{\"pid\":%s,\"name\":\"%s\",\"cpu_percent\":%s,\"memory_percent\":%s},", $2, $11, $3, $4}')
+if [ -n "$PROCESSES_RAW" ]; then
+  PROCESSES="[${PROCESSES_RAW%,}]"
+else
+  PROCESSES="[]"
+fi
+
+# Montar JSON simples e sempre válido
 JSON=$(cat <<EOF
 {
   "cpu": $CPU,
@@ -68,7 +76,8 @@ JSON=$(cat <<EOF
   "disk": $DISK,
   "uptime": "$UPTIME",
   "download_mbps": $DOWNLOAD,
-  "upload_mbps": $UPLOAD
+  "upload_mbps": $UPLOAD,
+  "processes": $PROCESSES
 }
 EOF
 )

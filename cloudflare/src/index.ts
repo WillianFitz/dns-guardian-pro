@@ -224,6 +224,16 @@ export default {
           ).bind(companySlug, body.firewall.jails_active || 0, body.firewall.ips_banned || 0, body.firewall.nft_rules || 0, body.firewall.uptime || '0h 0m').run();
         }
 
+        // Registrar um log simples de sistema a cada ingest
+        await env.DB.prepare(
+          'INSERT INTO firewall_logs (company_slug, log_type, message, source_ip) VALUES (?, ?, ?, ?)'
+        ).bind(
+          companySlug,
+          'system',
+          `Métricas: CPU=${body.cpu || 0}%, MEM=${body.memory || 0}%, DISK=${body.disk || 0}%`,
+          null
+        ).run();
+
         return jsonResponse({ ok: true }, 200, origin);
       }
 
@@ -644,6 +654,23 @@ export default {
           'SELECT pid, name, cpu_percent as cpu, memory_percent as memory FROM system_processes WHERE company_slug = ? ORDER BY memory_percent DESC'
         ).bind(companySlug).all();
         return jsonResponse(results.results, 200, origin);
+      }
+
+      // GET /system/logs
+      if (path === '/system/logs' && request.method === 'GET') {
+        const results = await env.DB.prepare(
+          `SELECT log_type, message, source_ip, created_at
+           FROM firewall_logs
+           WHERE company_slug = ? AND (log_type = 'system' OR log_type IS NULL)
+           ORDER BY created_at DESC
+           LIMIT 50`
+        ).bind(companySlug).all();
+        return jsonResponse(results.results.map((r: any) => ({
+          type: r.log_type || 'system',
+          message: r.message,
+          sourceIp: r.source_ip || null,
+          createdAt: r.created_at,
+        })), 200, origin);
       }
 
       return errorResponse('Not found', 404, origin);

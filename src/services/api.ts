@@ -325,6 +325,22 @@ export function useProcesses() {
   });
 }
 
+export interface SystemLog {
+  type: string;
+  message: string;
+  sourceIp: string | null;
+  createdAt: string;
+}
+
+export function useSystemLogs() {
+  return useQuery({
+    queryKey: ['system-logs', getCompanySlug()],
+    queryFn: () => fetchApi<SystemLog[]>(withCompany('/system/logs')),
+    refetchInterval: 30000,
+    retry: 1,
+  });
+}
+
 // === Admin ===
 export interface CompanyData {
   id: string;
