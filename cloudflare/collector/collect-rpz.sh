@@ -49,8 +49,8 @@ with open('$ANABLOCK_FILE', 'r') as f:
             domain = m.group(1)
             domains.append({'domain': domain, 'category': categorize(domain)})
 
-# Limitar a 1000 por request
-print(json.dumps(domains[:1000]))
+# Enviar TODOS os domínios (contagem real no painel)
+print(json.dumps(domains))
 " 2>/dev/null || echo "[]")
 
 JSON=$(cat <<EOF
