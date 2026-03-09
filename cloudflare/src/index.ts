@@ -401,19 +401,26 @@ export default {
       if (path === '/dns/stats' && request.method === 'GET') {
         const period = url.searchParams.get('period') || '24h';
         const hours = { '1h': 1, '3h': 3, '6h': 6, '12h': 12, '24h': 24 }[period] || 24;
-        const since = new Date(Date.now() - hours * 3600000).toISOString();
 
         const total = await env.DB.prepare(
-          'SELECT COUNT(*) as count FROM dns_queries WHERE company_slug = ? AND created_at >= ?'
-        ).bind(companySlug, since).first();
+          `SELECT COUNT(*) as count
+           FROM dns_queries
+           WHERE company_slug = ? AND created_at >= datetime('now', '-${hours} hours')`
+        ).bind(companySlug).first();
 
         const accepted = await env.DB.prepare(
-          "SELECT COUNT(*) as count FROM dns_queries WHERE company_slug = ? AND created_at >= ? AND status = 'accepted'"
-        ).bind(companySlug, since).first();
+          `SELECT COUNT(*) as count
+           FROM dns_queries
+           WHERE company_slug = ? AND created_at >= datetime('now', '-${hours} hours')
+             AND status = 'accepted'`
+        ).bind(companySlug).first();
 
         const denied = await env.DB.prepare(
-          "SELECT COUNT(*) as count FROM dns_queries WHERE company_slug = ? AND created_at >= ? AND status = 'denied'"
-        ).bind(companySlug, since).first();
+          `SELECT COUNT(*) as count
+           FROM dns_queries
+           WHERE company_slug = ? AND created_at >= datetime('now', '-${hours} hours')
+             AND status = 'denied'`
+        ).bind(companySlug).first();
 
         const totalCount = (total as any)?.count || 0;
         const acceptedCount = (accepted as any)?.count || 0;
