@@ -492,14 +492,15 @@ export default {
 
       // GET /rpz/stats
       if (path === '/rpz/stats' && request.method === 'GET') {
-        const domainCount = await env.DB.prepare('SELECT COUNT(*) as count FROM rpz_domains').first();
         const blockedCount = await env.DB.prepare(
           "SELECT COUNT(*) as count FROM rpz_blocks WHERE company_slug = ? AND created_at >= datetime('now', '-24 hours')"
         ).bind(companySlug).first();
         const status = await env.DB.prepare('SELECT * FROM rpz_status WHERE company_slug = ?').bind(companySlug).first();
 
+        const totalDomains = (status as any)?.total_domains;
+
         return jsonResponse({
-          blockedDomains: (domainCount as any)?.count || 0,
+          blockedDomains: totalDomains != null ? totalDomains : 0,
           blockedAttempts: (blockedCount as any)?.count || 0,
           lastUpdate: (status as any)?.last_sync || '--',
           listSize: formatBytes((status as any)?.list_size_bytes || 0),
