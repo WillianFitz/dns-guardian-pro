@@ -6,6 +6,7 @@
 # =============================================================
 
 # CONFIGURAÇÃO
+# (esses valores são sobrescritos pelo install.sh no servidor DNS)
 API_URL="https://dns-monitor-api.seudominio.workers.dev"
 API_KEY="SUA_API_KEY_AQUI"
 
@@ -25,49 +26,29 @@ HOURS=$(((UPTIME_SEC % 86400) / 3600))
 MINUTES=$(((UPTIME_SEC % 3600) / 60))
 UPTIME="${DAYS}d ${HOURS}h ${MINUTES}m"
 
-# Coletar tráfego de rede (interface principal)
-IFACE=$(ip route | grep default | awk '{print $5}' | head -1)
-if [ -n "$IFACE" ]; then
-    RX1=$(cat /sys/class/net/$IFACE/statistics/rx_bytes)
-    TX1=$(cat /sys/class/net/$IFACE/statistics/tx_bytes)
+# Coletar tráfego de rede (interface principal) – opcional, se algo falhar envia 0
+DOWNLOAD=0
+UPLOAD=0
+IFACE=$(ip route | grep default | awk '{print $5}' | head -1 2>/dev/null)
+if [ -n "$IFACE" ] && [ -r "/sys/class/net/$IFACE/statistics/rx_bytes" ]; then
+    RX1=$(cat /sys/class/net/$IFACE/statistics/rx_bytes 2>/dev/null || echo 0)
+    TX1=$(cat /sys/class/net/$IFACE/statistics/tx_bytes 2>/dev/null || echo 0)
     sleep 1
-    RX2=$(cat /sys/class/net/$IFACE/statistics/rx_bytes)
-    TX2=$(cat /sys/class/net/$IFACE/statistics/tx_bytes)
-    DOWNLOAD=$(echo "scale=4; ($RX2 - $RX1) * 8 / 1000000" | bc)
-    UPLOAD=$(echo "scale=4; ($TX2 - $TX1) * 8 / 1000000" | bc)
-else
-    DOWNLOAD=0
-    UPLOAD=0
+    RX2=$(cat /sys/class/net/$IFACE/statistics/rx_bytes 2>/dev/null || echo 0)
+    TX2=$(cat /sys/class/net/$IFACE/statistics/tx_bytes 2>/dev/null || echo 0)
+    DOWNLOAD=$(echo "scale=4; ($RX2 - $RX1) * 8 / 1000000" | bc 2>/dev/null || echo 0)
+    UPLOAD=$(echo "scale=4; ($TX2 - $TX1) * 8 / 1000000" | bc 2>/dev/null || echo 0)
 fi
 
-# Coletar processos (top 10 por memória)
-PROCESSES=$(ps aux --sort=-%mem | head -11 | tail -10 | awk '{printf "{\"pid\":%s,\"name\":\"%s\",\"cpu_percent\":%s,\"memory_percent\":%s},", $2, $11, $3, $4}')
-PROCESSES="[${PROCESSES%,}]"
-
-# Coletar stats do Fail2Ban
-JAILS_ACTIVE=$(fail2ban-client status 2>/dev/null | grep "Number of jail" | awk '{print $NF}' || echo 0)
-IPS_BANNED=$(fail2ban-client status 2>/dev/null | grep -c "Currently banned" || echo 0)
-NFT_RULES=$(nft list ruleset 2>/dev/null | grep -c "rule" || echo 0)
-
-# Montar JSON
-JSON=$(cat <<EOF
-{
-  "cpu": $CPU,
-  "memory": $MEMORY,
-  "disk": $DISK,
-  "uptime": "$UPTIME",
-  "download_mbps": $DOWNLOAD,
-  "upload_mbps": $UPLOAD,
-  "processes": $PROCESSES,
-  "firewall": {
-    "jails_active": $JAILS_ACTIVE,
-    "ips_banned": $IPS_BANNED,
-    "nft_rules": $NFT_RULES,
-    "uptime": "$UPTIME"
-  }
-}
-EOF
-)
+# Montar JSON simples e sempre válido
+JSON=$(printf '{
+  "cpu": %.2f,
+  "memory": %.2f,
+  "disk": %.2f,
+  "uptime": "%s",
+  "download_mbps": %.4f,
+  "upload_mbps": %.4f
+}' "$CPU" "$MEMORY" "$DISK" "$UPTIME" "$DOWNLOAD" "$UPLOAD")
 
 # Enviar
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
