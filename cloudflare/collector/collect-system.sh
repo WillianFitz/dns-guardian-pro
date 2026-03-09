@@ -43,6 +43,8 @@ fi
 # Garantir formato numérico aceitável pelo printf (0.1234 ao invés de .1234)
 fix_float() {
   local v="$1"
+  # trocar vírgula por ponto (locale pt-BR)
+  v=$(echo "$v" | tr ',' '.')
   if [ -z "$v" ]; then
     echo "0"
   elif echo "$v" | grep -qE '^\.'; then
