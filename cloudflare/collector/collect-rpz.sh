@@ -23,7 +23,7 @@ DOMAIN_COUNT=$(grep -c 'local-zone:' "$ANABLOCK_FILE" 2>/dev/null || echo 0)
 # Gerar serial baseado na data de modificação
 ZONE_SERIAL=$(stat -c %Y "$ANABLOCK_FILE" 2>/dev/null || date +%s)
 
-# Extrair domínios com categorias
+# Extrair domínios com categorias (lista completa)
 DOMAINS=$(python3 -c "
 import json, re
 
@@ -49,27 +49,29 @@ with open('$ANABLOCK_FILE', 'r') as f:
             domain = m.group(1)
             domains.append({'domain': domain, 'category': categorize(domain)})
 
-# Limitar a 1000 domínios enviados (para não estourar tamanho de request),
-# mas enviar o total real em total_domains para o painel mostrar a contagem correta.
-print(json.dumps(domains[:1000]))
+# Enviar TODOS os domínios; o payload é salvo em arquivo temporário
+print(json.dumps(domains))
 " 2>/dev/null || echo "[]")
 
-JSON=$(cat <<EOF
+JSON_FILE="/tmp/rpz-list.json"
+
+cat > "$JSON_FILE" <<EOF
 {
   "zone_status": "active",
   "zone_serial": "$ZONE_SERIAL",
   "list_size_bytes": $LIST_SIZE,
-  "total_domains": $DOMAIN_COUNT,
   "domains": $DOMAINS
 }
 EOF
-)
+
 
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
     -X POST "$API_URL/ingest/rpz-list" \
     -H "Authorization: Bearer $API_KEY" \
     -H "Content-Type: application/json" \
-    -d "$JSON" \
+    -d @"$JSON_FILE" \
     --max-time 30)
 
 echo "$(date): RPZ list sent - $DOMAIN_COUNT domains (HTTP $HTTP_CODE)" >> /opt/dns-monitor/collector.log
+
+rm -f "$JSON_FILE"
