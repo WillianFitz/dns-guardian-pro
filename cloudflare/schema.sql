@@ -33,6 +33,22 @@ CREATE INDEX IF NOT EXISTS idx_dns_queries_domain ON dns_queries(domain, created
 CREATE INDEX IF NOT EXISTS idx_dns_queries_client ON dns_queries(client_ip, created_at);
 CREATE INDEX IF NOT EXISTS idx_dns_queries_status ON dns_queries(status, created_at);
 
+-- Agregados por hora (para dashboards rápidos e escaláveis)
+CREATE TABLE IF NOT EXISTS dns_agg_hourly (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_slug TEXT NOT NULL,
+  bucket_start DATETIME NOT NULL, -- início da hora (UTC)
+  accepted INTEGER DEFAULT 0,
+  denied INTEGER DEFAULT 0,
+  total INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(company_slug, bucket_start)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dns_agg_hourly_company_bucket
+  ON dns_agg_hourly(company_slug, bucket_start);
+
 -- Bloqueios RPZ (domínios bloqueados pela ANATEL)
 CREATE TABLE IF NOT EXISTS rpz_blocks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

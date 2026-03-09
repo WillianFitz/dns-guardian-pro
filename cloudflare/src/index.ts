@@ -148,14 +148,53 @@ export default {
 
         if (queries.length === 0) return errorResponse('No queries provided', 400, origin);
 
-        // Insert em batch
+        const nowIso = new Date().toISOString();
+
+        // Acúmulo por bucket horário para tabela agregada
+        const buckets: Record<string, { accepted: number; denied: number }> = {};
+
+        // Insert em batch (dados brutos)
         const stmt = env.DB.prepare(
           'INSERT INTO dns_queries (company_slug, domain, query_type, client_ip, status, response_time_ms, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
         );
-        const batch = queries.map((q: any) =>
-          stmt.bind(companySlug, q.domain, q.query_type || 'A', q.client_ip, q.status || 'accepted', q.response_time_ms || 0, q.timestamp || new Date().toISOString())
-        );
+        const batch = queries.map((q: any) => {
+          const status = q.status || 'accepted';
+          const ts = (q.timestamp as string | undefined) || nowIso;
+          const iso = ts.includes('T') ? ts : nowIso;
+          const bucket = iso.slice(0, 13) + ':00:00'; // arredonda para o início da hora (UTC string)
+
+          if (!buckets[bucket]) buckets[bucket] = { accepted: 0, denied: 0 };
+          if (status === 'denied') buckets[bucket].denied += 1;
+          else buckets[bucket].accepted += 1;
+
+          return stmt.bind(
+            companySlug,
+            q.domain,
+            q.query_type || 'A',
+            q.client_ip,
+            status,
+            q.response_time_ms || 0,
+            ts
+          );
+        });
         await env.DB.batch(batch);
+
+        // Atualizar agregados por hora
+        const aggStmt = env.DB.prepare(
+          `INSERT INTO dns_agg_hourly (company_slug, bucket_start, accepted, denied, total)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(company_slug, bucket_start) DO UPDATE SET
+             accepted = dns_agg_hourly.accepted + excluded.accepted,
+             denied = dns_agg_hourly.denied + excluded.denied,
+             total = dns_agg_hourly.total + excluded.total,
+             updated_at = CURRENT_TIMESTAMP`
+        );
+        const aggBatch = Object.entries(buckets).map(([bucket, c]) =>
+          aggStmt.bind(companySlug, bucket, c.accepted, c.denied, c.accepted + c.denied)
+        );
+        if (aggBatch.length > 0) {
+          await env.DB.batch(aggBatch);
+        }
 
         // Se houver bloqueios RPZ, registrar também
         const rpzBlocks = queries.filter((q: any) => q.status === 'denied' || q.rpz_blocked);
@@ -164,7 +203,7 @@ export default {
             'INSERT INTO rpz_blocks (company_slug, domain, client_ip, category, created_at) VALUES (?, ?, ?, ?, ?)'
           );
           const rpzBatch = rpzBlocks.map((q: any) =>
-            rpzStmt.bind(companySlug, q.domain, q.client_ip, q.category || 'Outros', q.timestamp || new Date().toISOString())
+            rpzStmt.bind(companySlug, q.domain, q.client_ip, q.category || 'Outros', q.timestamp || nowIso)
           );
           await env.DB.batch(rpzBatch);
 
@@ -179,11 +218,19 @@ export default {
               q.client_ip,
               'alta',
               'rpz_block',
-              q.timestamp || new Date().toISOString()
+              q.timestamp || nowIso
             )
           );
           await env.DB.batch(secBatch);
         }
+
+        // Retenção básica por empresa
+        await env.DB.prepare(
+          "DELETE FROM dns_queries WHERE company_slug = ? AND created_at < datetime('now', '-30 days')"
+        ).bind(companySlug).run();
+        await env.DB.prepare(
+          "DELETE FROM dns_agg_hourly WHERE company_slug = ? AND bucket_start < datetime('now', '-90 days')"
+        ).bind(companySlug).run();
 
         return jsonResponse({ inserted: queries.length, rpz_blocks: rpzBlocks.length }, 200, origin);
       }
@@ -400,29 +447,18 @@ export default {
         const period = url.searchParams.get('period') || '24h';
         const hours = { '1h': 1, '3h': 3, '6h': 6, '12h': 12, '24h': 24 }[period] || 24;
 
-        const total = await env.DB.prepare(
-          `SELECT COUNT(*) as count
-           FROM dns_queries
-           WHERE company_slug = ? AND created_at >= datetime('now', '-${hours} hours')`
+        const agg = await env.DB.prepare(
+          `SELECT
+             SUM(accepted) as accepted,
+             SUM(denied) as denied,
+             SUM(total)   as total
+           FROM dns_agg_hourly
+           WHERE company_slug = ? AND bucket_start >= datetime('now', '-${hours} hours')`
         ).bind(companySlug).first();
 
-        const accepted = await env.DB.prepare(
-          `SELECT COUNT(*) as count
-           FROM dns_queries
-           WHERE company_slug = ? AND created_at >= datetime('now', '-${hours} hours')
-             AND status = 'accepted'`
-        ).bind(companySlug).first();
-
-        const denied = await env.DB.prepare(
-          `SELECT COUNT(*) as count
-           FROM dns_queries
-           WHERE company_slug = ? AND created_at >= datetime('now', '-${hours} hours')
-             AND status = 'denied'`
-        ).bind(companySlug).first();
-
-        const totalCount = (total as any)?.count || 0;
-        const acceptedCount = (accepted as any)?.count || 0;
-        const deniedCount = (denied as any)?.count || 0;
+        const totalCount = (agg as any)?.total || 0;
+        const acceptedCount = (agg as any)?.accepted || 0;
+        const deniedCount = (agg as any)?.denied || 0;
 
         return jsonResponse({
           totalQueries: totalCount,
