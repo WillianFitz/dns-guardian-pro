@@ -58,15 +58,18 @@ DISK=$(fix_float "$DISK")
 DOWNLOAD=$(fix_float "$DOWNLOAD")
 UPLOAD=$(fix_float "$UPLOAD")
 
-# Montar JSON simples e sempre válido
-JSON=$(printf '{
-  "cpu": %.2f,
-  "memory": %.2f,
-  "disk": %.2f,
-  "uptime": "%s",
-  "download_mbps": %.4f,
-  "upload_mbps": %.4f
-}' "$CPU" "$MEMORY" "$DISK" "$UPTIME" "$DOWNLOAD" "$UPLOAD")
+# Montar JSON simples e sempre válido (sem usar printf de float)
+JSON=$(cat <<EOF
+{
+  "cpu": $CPU,
+  "memory": $MEMORY,
+  "disk": $DISK,
+  "uptime": "$UPTIME",
+  "download_mbps": $DOWNLOAD,
+  "upload_mbps": $UPLOAD
+}
+EOF
+)
 
 # Enviar
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
