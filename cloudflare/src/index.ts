@@ -263,22 +263,9 @@ export default {
            total_domains=excluded.total_domains, updated_at=CURRENT_TIMESTAMP`
         ).bind(companySlug, body.zone_status || 'active', body.zone_serial || '', body.list_size_bytes || 0, body.total_domains || 0).run();
 
-        // Atualizar domínios RPZ se fornecidos:
-        // limpamos a tabela e reescrevemos com a lista atual,
-        // assim o COUNT reflete exatamente o anablock.conf
-        if (body.domains && body.domains.length > 0) {
-          await env.DB.prepare('DELETE FROM rpz_domains').run();
-          const domStmt = env.DB.prepare(
-            'INSERT OR IGNORE INTO rpz_domains (domain, category) VALUES (?, ?)'
-          );
-          // Process in batches of 100
-          for (let i = 0; i < body.domains.length; i += 100) {
-            const batch = body.domains.slice(i, i + 100).map((d: any) =>
-              domStmt.bind(d.domain, d.category || 'Outros')
-            );
-            await env.DB.batch(batch);
-          }
-        }
+        // NÃO atualizamos mais rpz_domains aqui.
+        // A contagem exibida no painel vem de total_domains,
+        // que é calculado no próprio DNS (collector) e salvo em rpz_status.
 
         return jsonResponse({ ok: true }, 200, origin);
       }
