@@ -40,6 +40,24 @@ if [ -n "$IFACE" ] && [ -r "/sys/class/net/$IFACE/statistics/rx_bytes" ]; then
     UPLOAD=$(echo "scale=4; ($TX2 - $TX1) * 8 / 1000000" | bc 2>/dev/null || echo 0)
 fi
 
+# Garantir formato numérico aceitável pelo printf (0.1234 ao invés de .1234)
+fix_float() {
+  local v="$1"
+  if [ -z "$v" ]; then
+    echo "0"
+  elif echo "$v" | grep -qE '^\.'; then
+    echo "0$v"
+  else
+    echo "$v"
+  fi
+}
+
+CPU=$(fix_float "$CPU")
+MEMORY=$(fix_float "$MEMORY")
+DISK=$(fix_float "$DISK")
+DOWNLOAD=$(fix_float "$DOWNLOAD")
+UPLOAD=$(fix_float "$UPLOAD")
+
 # Montar JSON simples e sempre válido
 JSON=$(printf '{
   "cpu": %.2f,
