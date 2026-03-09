@@ -46,9 +46,23 @@ def categorize_domain(domain):
     return 'Outros'
 
 def parse_unbound_log(log_file, byte_offset=0, anablock_file=None):
-    queries = []
+    """
+    Lê o log do Unbound a partir de um offset em bytes e retorna
+    apenas informações AGREGADAS:
+      - total de queries aceitas / negadas
+      - contagem por tipo de consulta
+      - contagem por domínio
+      - contagem por cliente (IP)
+      - lista de eventos bloqueados (RPZ)
+    """
+    total_accepted = 0
+    total_denied = 0
+    blocked_events = []
     blocked_domains = set()
-    
+    by_type = {}
+    by_domain = {}
+    by_client = {}
+
     if anablock_file:
         blocked_domains = load_blocked_domains(anablock_file)
 
@@ -98,22 +112,33 @@ def parse_unbound_log(log_file, byte_offset=0, anablock_file=None):
                     timestamp_unix, client_ip, domain, query_type = match.groups()
                     domain_clean = domain.rstrip('.').lower()
                     is_blocked = domain_clean in blocked_domains
-                    
+
                     try:
                         timestamp = datetime.fromtimestamp(int(timestamp_unix)).strftime('%Y-%m-%dT%H:%M:%S')
                     except:
                         timestamp = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
 
-                    queries.append({
-                        'domain': domain_clean,
-                        'query_type': query_type,
-                        'client_ip': client_ip,
-                        'status': 'denied' if is_blocked else 'accepted',
-                        'rpz_blocked': is_blocked,
-                        'category': categorize_domain(domain_clean) if is_blocked else '',
-                        'timestamp': timestamp,
-                        'response_time_ms': 0
-                    })
+                    # Contagens gerais
+                    if is_blocked:
+                        total_denied += 1
+                    else:
+                        total_accepted += 1
+
+                    # Contagens por tipo, domínio e cliente
+                    by_type[query_type] = by_type.get(query_type, 0) + 1
+                    by_domain[domain_clean] = by_domain.get(domain_clean, 0) + 1
+                    by_client[client_ip] = by_client.get(client_ip, 0) + 1
+
+                    if is_blocked:
+                        blocked_events.append({
+                            'domain': domain_clean,
+                            'query_type': query_type,
+                            'client_ip': client_ip,
+                            'category': categorize_domain(domain_clean),
+                            'timestamp': timestamp,
+                        })
+                    else:
+                        total_accepted += 1
                     continue
 
                 # Tentar formato com data legível
@@ -129,22 +154,49 @@ def parse_unbound_log(log_file, byte_offset=0, anablock_file=None):
                     except:
                         timestamp = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
 
-                    queries.append({
-                        'domain': domain_clean,
-                        'query_type': query_type,
-                        'client_ip': client_ip,
-                        'status': 'denied' if is_blocked else 'accepted',
-                        'rpz_blocked': is_blocked,
-                        'category': categorize_domain(domain_clean) if is_blocked else '',
-                        'timestamp': timestamp,
-                        'response_time_ms': 0
-                    })
+                    # Contagens gerais
+                    if is_blocked:
+                        total_denied += 1
+                    else:
+                        total_accepted += 1
+
+                    # Contagens por tipo, domínio e cliente
+                    by_type[query_type] = by_type.get(query_type, 0) + 1
+                    by_domain[domain_clean] = by_domain.get(domain_clean, 0) + 1
+                    by_client[client_ip] = by_client.get(client_ip, 0) + 1
+
+                    if is_blocked:
+                        blocked_events.append({
+                            'domain': domain_clean,
+                            'query_type': query_type,
+                            'client_ip': client_ip,
+                            'category': categorize_domain(domain_clean),
+                            'timestamp': timestamp,
+                        })
+                    else:
+                        total_accepted += 1
 
     except Exception as e:
-        print(json.dumps({'queries': [], 'error': str(e)}))
+        print(json.dumps({
+            'summary': {'accepted': 0, 'denied': 0},
+            'by_type': {},
+            'by_domain': {},
+            'by_client': {},
+            'blocked': [],
+            'error': str(e),
+        }))
         sys.exit(1)
 
-    return queries
+    return {
+        'summary': {
+            'accepted': total_accepted,
+            'denied': total_denied,
+        },
+        'by_type': by_type,
+        'by_domain': by_domain,
+        'by_client': by_client,
+        'blocked': blocked_events,
+    }
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
@@ -155,5 +207,5 @@ if __name__ == '__main__':
     byte_offset = sys.argv[2] if len(sys.argv) > 2 else 0
     anablock_file = sys.argv[3] if len(sys.argv) > 3 else None
 
-    queries = parse_unbound_log(log_file, byte_offset, anablock_file)
-    print(json.dumps({'queries': queries}))
+    result = parse_unbound_log(log_file, byte_offset, anablock_file)
+    print(json.dumps(result))

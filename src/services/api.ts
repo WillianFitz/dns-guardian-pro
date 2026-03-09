@@ -63,7 +63,7 @@ export function useDnsStats(period: string) {
   return useQuery({
     queryKey: ['dns-stats', period, getCompanySlug()],
     queryFn: () => fetchApi<DnsStats>(withCompany('/dns/stats', `period=${period}`)),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     retry: 1,
   });
 }
@@ -78,7 +78,7 @@ export function useDnsActivity(period: string) {
   return useQuery({
     queryKey: ['dns-activity', period, getCompanySlug()],
     queryFn: () => fetchApi<DnsActivityPoint[]>(withCompany('/dns/activity', `period=${period}`)),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     retry: 1,
   });
 }
@@ -133,7 +133,7 @@ export function useRpzStats() {
   return useQuery({
     queryKey: ['rpz-stats', getCompanySlug()],
     queryFn: () => fetchApi<RpzStats>(withCompany('/rpz/stats')),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     retry: 1,
   });
 }
@@ -148,7 +148,7 @@ export function useRpzStatus() {
   return useQuery({
     queryKey: ['rpz-status', getCompanySlug()],
     queryFn: () => fetchApi<RpzStatus>(withCompany('/rpz/status')),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     retry: 1,
   });
 }
@@ -162,7 +162,7 @@ export function useBlockedActivity(period: string) {
   return useQuery({
     queryKey: ['blocked-activity', period, getCompanySlug()],
     queryFn: () => fetchApi<BlockedActivityPoint[]>(withCompany('/rpz/activity', `period=${period}`)),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     retry: 1,
   });
 }
@@ -192,7 +192,7 @@ export function useRecentBlocked(limit = 10) {
   return useQuery({
     queryKey: ['recent-blocked', limit, getCompanySlug()],
     queryFn: () => fetchApi<BlockedDomain[]>(withCompany('/rpz/recent', `limit=${limit}`)),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     retry: 1,
   });
 }
@@ -209,7 +209,7 @@ export function useSecurityStats() {
   return useQuery({
     queryKey: ['security-stats', getCompanySlug()],
     queryFn: () => fetchApi<SecurityStats>(withCompany('/security/stats')),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     retry: 1,
   });
 }
@@ -225,7 +225,7 @@ export function useSecurityEvents() {
   return useQuery({
     queryKey: ['security-events', getCompanySlug()],
     queryFn: () => fetchApi<SecurityEvent[]>(withCompany('/security/events')),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     retry: 1,
   });
 }
@@ -241,7 +241,7 @@ export function useBlockedIps() {
   return useQuery({
     queryKey: ['blocked-ips', getCompanySlug()],
     queryFn: () => fetchApi<BlockedIp[]>(withCompany('/security/blocked-ips')),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     retry: 1,
   });
 }
@@ -257,7 +257,7 @@ export function useFirewallStats() {
   return useQuery({
     queryKey: ['firewall-stats', getCompanySlug()],
     queryFn: () => fetchApi<FirewallStats>(withCompany('/security/firewall')),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     retry: 1,
   });
 }
@@ -289,7 +289,7 @@ export function useCpuMemory() {
   return useQuery({
     queryKey: ['cpu-memory', getCompanySlug()],
     queryFn: () => fetchApi<SystemMetricPoint[]>(withCompany('/system/cpu-memory')),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     retry: 1,
   });
 }
@@ -304,7 +304,7 @@ export function useNetworkTraffic() {
   return useQuery({
     queryKey: ['network-traffic', getCompanySlug()],
     queryFn: () => fetchApi<NetworkPoint[]>(withCompany('/system/network')),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     retry: 1,
   });
 }
@@ -320,7 +320,7 @@ export function useProcesses() {
   return useQuery({
     queryKey: ['processes', getCompanySlug()],
     queryFn: () => fetchApi<SystemProcess[]>(withCompany('/system/processes')),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     retry: 1,
   });
 }
@@ -336,7 +336,7 @@ export function useSystemLogs() {
   return useQuery({
     queryKey: ['system-logs', getCompanySlug()],
     queryFn: () => fetchApi<SystemLog[]>(withCompany('/system/logs')),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     retry: 1,
   });
 }

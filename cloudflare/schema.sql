@@ -49,6 +49,51 @@ CREATE TABLE IF NOT EXISTS dns_agg_hourly (
 CREATE INDEX IF NOT EXISTS idx_dns_agg_hourly_company_bucket
   ON dns_agg_hourly(company_slug, bucket_start);
 
+-- Agregados por tipo de consulta (por hora)
+CREATE TABLE IF NOT EXISTS dns_agg_query_types_hourly (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_slug TEXT NOT NULL,
+  bucket_start DATETIME NOT NULL,
+  query_type TEXT NOT NULL,
+  count INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(company_slug, bucket_start, query_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dns_agg_qtypes_company_bucket
+  ON dns_agg_query_types_hourly(company_slug, bucket_start);
+
+-- Agregados por domínio (por hora)
+CREATE TABLE IF NOT EXISTS dns_agg_domains_hourly (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_slug TEXT NOT NULL,
+  bucket_start DATETIME NOT NULL,
+  domain TEXT NOT NULL,
+  count INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(company_slug, bucket_start, domain)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dns_agg_domains_company_bucket
+  ON dns_agg_domains_hourly(company_slug, bucket_start);
+
+-- Agregados por cliente (IP) (por hora)
+CREATE TABLE IF NOT EXISTS dns_agg_clients_hourly (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_slug TEXT NOT NULL,
+  bucket_start DATETIME NOT NULL,
+  client_ip TEXT NOT NULL,
+  count INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(company_slug, bucket_start, client_ip)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dns_agg_clients_company_bucket
+  ON dns_agg_clients_hourly(company_slug, bucket_start);
+
 -- Bloqueios RPZ (domínios bloqueados pela ANATEL)
 CREATE TABLE IF NOT EXISTS rpz_blocks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
