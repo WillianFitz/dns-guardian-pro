@@ -49,8 +49,9 @@ with open('$ANABLOCK_FILE', 'r') as f:
             domain = m.group(1)
             domains.append({'domain': domain, 'category': categorize(domain)})
 
-# Enviar TODOS os domínios (contagem real no painel)
-print(json.dumps(domains))
+# Limitar a 1000 domínios enviados (para não estourar tamanho de request),
+# mas enviar o total real em total_domains para o painel mostrar a contagem correta.
+print(json.dumps(domains[:1000]))
 " 2>/dev/null || echo "[]")
 
 JSON=$(cat <<EOF

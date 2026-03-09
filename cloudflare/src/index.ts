@@ -246,14 +246,27 @@ export default {
 
         const body: any = await request.json();
 
+        // Garantir que rpz_status tenha coluna total_domains (rodará com erro ignorado após criada)
+        try {
+          // SQLite moderno aceita IF NOT EXISTS; se a coluna já existe, erro é ignorado pelo catch.
+          await env.DB.exec('ALTER TABLE rpz_status ADD COLUMN total_domains INTEGER DEFAULT 0');
+        } catch {}
+
         // Atualizar status RPZ
         await env.DB.prepare(
-          `INSERT INTO rpz_status (company_slug, zone_status, zone_serial, last_sync, list_size_bytes)
-           VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
+          `INSERT INTO rpz_status (company_slug, zone_status, zone_serial, last_sync, list_size_bytes, total_domains)
+           VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
            ON CONFLICT(company_slug) DO UPDATE SET
            zone_status=excluded.zone_status, zone_serial=excluded.zone_serial,
-           last_sync=CURRENT_TIMESTAMP, list_size_bytes=excluded.list_size_bytes, updated_at=CURRENT_TIMESTAMP`
-        ).bind(companySlug, body.zone_status || 'active', body.zone_serial || '', body.list_size_bytes || 0).run();
+           last_sync=CURRENT_TIMESTAMP, list_size_bytes=excluded.list_size_bytes,
+           total_domains=excluded.total_domains, updated_at=CURRENT_TIMESTAMP`
+        ).bind(
+          companySlug,
+          body.zone_status || 'active',
+          body.zone_serial || '',
+          body.list_size_bytes || 0,
+          body.total_domains || 0
+        ).run();
 
         // Atualizar domínios RPZ se fornecidos
         if (body.domains && body.domains.length > 0) {
@@ -494,14 +507,15 @@ export default {
 
       // GET /rpz/stats
       if (path === '/rpz/stats' && request.method === 'GET') {
-        const domainCount = await env.DB.prepare('SELECT COUNT(*) as count FROM rpz_domains').first();
         const blockedCount = await env.DB.prepare(
           "SELECT COUNT(*) as count FROM rpz_blocks WHERE company_slug = ? AND created_at >= datetime('now', '-24 hours')"
         ).bind(companySlug).first();
         const status = await env.DB.prepare('SELECT * FROM rpz_status WHERE company_slug = ?').bind(companySlug).first();
 
+        const totalDomains = (status as any)?.total_domains;
+
         return jsonResponse({
-          blockedDomains: (domainCount as any)?.count || 0,
+          blockedDomains: totalDomains != null ? totalDomains : 0,
           blockedAttempts: (blockedCount as any)?.count || 0,
           lastUpdate: (status as any)?.last_sync || '--',
           listSize: formatBytes((status as any)?.list_size_bytes || 0),
