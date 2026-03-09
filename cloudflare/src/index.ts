@@ -255,8 +255,11 @@ export default {
            last_sync=CURRENT_TIMESTAMP, list_size_bytes=excluded.list_size_bytes, updated_at=CURRENT_TIMESTAMP`
         ).bind(companySlug, body.zone_status || 'active', body.zone_serial || '', body.list_size_bytes || 0).run();
 
-        // Atualizar domínios RPZ se fornecidos
+        // Atualizar domínios RPZ se fornecidos:
+        // limpamos a tabela e reescrevemos com a lista atual,
+        // assim o COUNT reflete exatamente o anablock.conf
         if (body.domains && body.domains.length > 0) {
+          await env.DB.prepare('DELETE FROM rpz_domains').run();
           const domStmt = env.DB.prepare(
             'INSERT OR IGNORE INTO rpz_domains (domain, category) VALUES (?, ?)'
           );
