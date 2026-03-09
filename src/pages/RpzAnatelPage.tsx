@@ -8,6 +8,14 @@ import { useRpzStats, useRpzStatus, useBlockedActivity, useBlockedCategories, us
 const timeFilters = ['1h', '3h', '6h', '12h', '24h'];
 const catColors = ['hsl(0,84%,60%)', 'hsl(25,95%,53%)', 'hsl(48,96%,53%)', 'hsl(220,14%,80%)', 'hsl(262,83%,58%)'];
 
+function formatUtcToLocal(dateStr?: string) {
+  if (!dateStr) return '--';
+  const iso = dateStr.replace(' ', 'T') + 'Z';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
 const RpzAnatelPage = () => {
   const [period, setPeriod] = useState('1h');
   const stats = useRpzStats();
@@ -34,7 +42,7 @@ const RpzAnatelPage = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={<Ban className="w-8 h-8 text-destructive" />} value={s?.blockedDomains?.toLocaleString() || '0'} label="Domínios Bloqueados" badge="Lista Ativa" badgeColor="blue" />
         <StatCard icon={<AlertTriangle className="w-8 h-8 text-warning" />} value={s?.blockedAttempts?.toLocaleString() || '0'} label="Tentativas Bloqueadas" badge="Últimas 24h" badgeColor="green" />
-        <StatCard icon={<RefreshCw className="w-8 h-8 text-info" />} value={s?.lastUpdate || '--'} label="Última Atualização" badge="Auto-Update" badgeColor="green" />
+        <StatCard icon={<RefreshCw className="w-8 h-8 text-info" />} value={formatUtcToLocal(s?.lastUpdate)} label="Última Atualização" badge="Auto-Update" badgeColor="green" />
         <StatCard icon={<Database className="w-8 h-8 text-success" />} value={s?.listSize || '0 MB'} label="Tamanho da Lista" badge="db.rpz.zone" badgeColor="green" />
       </div>
 
@@ -58,7 +66,7 @@ const RpzAnatelPage = () => {
             <p className="text-xs text-muted-foreground">Serial da Zona</p>
           </div>
           <div className="text-center">
-            <p className="text-info font-semibold">{st?.lastSync || '--'}</p>
+            <p className="text-info font-semibold">{formatUtcToLocal(st?.lastSync)}</p>
             <p className="text-xs text-muted-foreground">Última Sync</p>
           </div>
           <div className="text-center">
