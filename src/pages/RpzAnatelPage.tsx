@@ -19,6 +19,16 @@ const RpzAnatelPage = () => {
   const s = stats.data;
   const st = status.data;
 
+  // Ajustar exibição de horário para o fuso local do navegador
+  const activityData = activity.data?.map(p => {
+    const iso = p.time.replace(' ', 'T') + 'Z';
+    const d = new Date(iso);
+    const label = isNaN(d.getTime())
+      ? p.time
+      : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    return { ...p, timeLabel: label };
+  });
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -76,9 +86,9 @@ const RpzAnatelPage = () => {
           <DataState isLoading={activity.isLoading} isError={activity.isError} isEmpty={!activity.data?.length}
             icon={<Ban className="w-12 h-12" />} emptyMessage="Aguardando dados RPZ..." emptySubMessage="Configure a zona RPZ no servidor DNS">
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={activity.data}>
+              <AreaChart data={activityData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="time" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                <XAxis dataKey="timeLabel" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
                 <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
                 <Tooltip /><Legend />
                 <Area type="monotone" dataKey="blocked" name="Tentativas Bloqueadas" stroke="hsl(0,84%,60%)" fill="hsl(0,84%,60%,0.15)" strokeWidth={2} />
