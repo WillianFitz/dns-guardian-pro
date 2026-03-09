@@ -246,14 +246,22 @@ export default {
 
         const body: any = await request.json();
 
+        // Garantir que rpz_status tenha coluna total_domains (para contar do lado do DNS)
+        try {
+          await env.DB.exec('ALTER TABLE rpz_status ADD COLUMN total_domains INTEGER DEFAULT 0');
+        } catch {
+          // ignora erro se a coluna já existe
+        }
+
         // Atualizar status RPZ
         await env.DB.prepare(
-          `INSERT INTO rpz_status (company_slug, zone_status, zone_serial, last_sync, list_size_bytes)
-           VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
+          `INSERT INTO rpz_status (company_slug, zone_status, zone_serial, last_sync, list_size_bytes, total_domains)
+           VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
            ON CONFLICT(company_slug) DO UPDATE SET
            zone_status=excluded.zone_status, zone_serial=excluded.zone_serial,
-           last_sync=CURRENT_TIMESTAMP, list_size_bytes=excluded.list_size_bytes, updated_at=CURRENT_TIMESTAMP`
-        ).bind(companySlug, body.zone_status || 'active', body.zone_serial || '', body.list_size_bytes || 0).run();
+           last_sync=CURRENT_TIMESTAMP, list_size_bytes=excluded.list_size_bytes,
+           total_domains=excluded.total_domains, updated_at=CURRENT_TIMESTAMP`
+        ).bind(companySlug, body.zone_status || 'active', body.zone_serial || '', body.list_size_bytes || 0, body.total_domains || 0).run();
 
         // Atualizar domínios RPZ se fornecidos:
         // limpamos a tabela e reescrevemos com a lista atual,

@@ -60,6 +60,7 @@ cat > "$JSON_FILE" <<EOF
   "zone_status": "active",
   "zone_serial": "$ZONE_SERIAL",
   "list_size_bytes": $LIST_SIZE,
+  "total_domains": $DOMAIN_COUNT,
   "domains": $DOMAINS
 }
 EOF

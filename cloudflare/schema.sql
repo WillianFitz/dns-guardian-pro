@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS rpz_status (
   zone_serial TEXT DEFAULT '',
   last_sync DATETIME,
   list_size_bytes INTEGER DEFAULT 0,
+  total_domains INTEGER DEFAULT 0,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
